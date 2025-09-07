@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AED Exchange Rates</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .card {
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        .currency-rate {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        .hero-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 0;
+        }
+        .rate-card {
+            transition: transform 0.2s;
+        }
+        .rate-card:hover {
+            transform: translateY(-5px);
+        }
+        .last-updated {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-exchange-alt me-2"></i>AED Exchange Rates
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/admin">
+                    <i class="fas fa-cog me-1"></i>Admin
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="hero-section">
+        <div class="container text-center">
+            <h1 class="display-4 mb-3">
+                <i class="fas fa-coins me-3"></i>UAE Dirham Exchange Rates
+            </h1>
+            <p class="lead">Real-time currency exchange rates for AED</p>
+            <p class="last-updated">
+                <i class="fas fa-clock me-1"></i>Exchange rates updated regularly
+            </p>
+        </div>
+    </div>
+
+    <div class="container mt-5">
+        {% if currencies %}
+        <!-- From AED Section -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <h2 class="text-center mb-4">
+                    <i class="fas fa-arrow-right me-2 text-primary"></i>From AED
+                    <small class="text-muted d-block mt-2">1 AED equals</small>
+                </h2>
+                <div class="row" id="fromAedContainer">
+                    <!-- Cards will be loaded here by JavaScript -->
+                </div>
+                <div class="text-center mt-3">
+                    <button id="loadMoreFromAed" class="btn btn-outline-primary" style="display: none;">
+                        <i class="fas fa-plus me-2"></i>Load More
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- To AED Section -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <h2 class="text-center mb-4">
+                    <i class="fas fa-arrow-left me-2 text-success"></i>To AED
+                    <small class="text-muted d-block mt-2">1 unit equals</small>
+                </h2>
+                <div class="row" id="toAedContainer">
+                    <!-- Cards will be loaded here by JavaScript -->
+                </div>
+                <div class="text-center mt-3">
+                    <button id="loadMoreToAed" class="btn btn-outline-success" style="display: none;">
+                        <i class="fas fa-plus me-2"></i>Load More
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exchange Table -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-table me-2"></i>Exchange Rate Table
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Currency</th>
+                                        <th>Symbol</th>
+                                        <th>1 AED =</th>
+                                        <th>1 Unit = AED</th>
+                                        <th>10 AED =</th>
+                                        <th>100 AED =</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for currency in currencies_db %}
+                                    <tr>
+                                        <td><strong>{{ currency.name }}</strong></td>
+                                        <td><span class="badge bg-secondary">{{ currency.symbol }}</span></td>
+                                        <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed) }}</td>
+                                        <td class="currency-rate">{{ "%.6f"|format(1/currency.rate_to_aed) }}</td>
+                                        <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed * 10) }}</td>
+                                        <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed * 100) }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="row">
+            <div class="col-12">
+                <div class="text-center text-muted py-5">
+                    <i class="fas fa-coins fa-4x mb-4"></i>
+                    <h3>No Exchange Rates Available</h3>
+                    <p>Exchange rates are currently being updated. Please check back later.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <footer class="bg-light mt-5 py-4">
+        <div class="container text-center">
+            <p class="text-muted mb-0">
+                <i class="fas fa-info-circle me-1"></i>
+                Exchange rates are for informational purposes only. 
+                <a href="/admin" class="text-decoration-none">Admin Access</a>
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Currency data from server
+        const currencies = {{ currencies|tojson|safe }};
+        
+        // Infinite scroll configuration
+        const ITEMS_PER_PAGE = 4;
+        let fromAedCurrentPage = 0;
+        let toAedCurrentPage = 0;
+        
+        // Load initial cards
+        document.addEventListener('DOMContentLoaded', function() {
+            loadFromAedCards();
+            loadToAedCards();
+            
+            // Set up infinite scroll
+            window.addEventListener('scroll', handleScroll);
+        });
+        
+        function loadFromAedCards() {
+            const container = document.getElementById('fromAedContainer');
+            const loadMoreBtn = document.getElementById('loadMoreFromAed');
+            
+            const startIndex = fromAedCurrentPage * ITEMS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, currencies.length);
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                const currency = currencies[i];
+                const cardHtml = `
+                    <div class="col-md-6 col-lg-3 mb-4 currency-card" data-aos="fade-up">
+                        <div class="card rate-card border-primary h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title text-primary">${currency.symbol}</h5>
+                                <h6 class="card-subtitle mb-3 text-muted">${currency.name}</h6>
+                                <div class="display-6 currency-rate text-primary mb-2">
+                                    ${currency.rate_to_aed.toFixed(4)}
+                                </div>
+                                <small class="text-muted">
+                                    1 AED = ${currency.rate_to_aed.toFixed(4)} ${currency.symbol}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            }
+            
+            fromAedCurrentPage++;
+            
+            // Show/hide load more button
+            if (endIndex >= currencies.length) {
+                loadMoreBtn.style.display = 'none';
+            } else {
+                loadMoreBtn.style.display = 'inline-block';
+            }
+        }
+        
+        function loadToAedCards() {
+            const container = document.getElementById('toAedContainer');
+            const loadMoreBtn = document.getElementById('loadMoreToAed');
+            
+            const startIndex = toAedCurrentPage * ITEMS_PER_PAGE;
+            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, currencies.length);
+            
+            for (let i = startIndex; i < endIndex; i++) {
+                const currency = currencies[i];
+                const toAedRate = (1 / currency.rate_to_aed).toFixed(4);
+                const cardHtml = `
+                    <div class="col-md-6 col-lg-3 mb-4 currency-card" data-aos="fade-up">
+                        <div class="card rate-card border-success h-100">
+                            <div class="card-body text-center">
+                                <h5 class="card-title text-success">${currency.symbol}</h5>
+                                <h6 class="card-subtitle mb-3 text-muted">${currency.name}</h6>
+                                <div class="display-6 currency-rate text-success mb-2">
+                                    ${toAedRate}
+                                </div>
+                                <small class="text-muted">
+                                    1 ${currency.symbol} = ${toAedRate} AED
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+            }
+            
+            toAedCurrentPage++;
+            
+            // Show/hide load more button
+            if (endIndex >= currencies.length) {
+                loadMoreBtn.style.display = 'none';
+            } else {
+                loadMoreBtn.style.display = 'inline-block';
+            }
+        }
+        
+        function handleScroll() {
+            const fromAedContainer = document.getElementById('fromAedContainer');
+            const toAedContainer = document.getElementById('toAedContainer');
+            
+            // Check if user scrolled near the bottom of From AED section
+            const fromAedRect = fromAedContainer.getBoundingClientRect();
+            if (fromAedRect.bottom <= window.innerHeight + 200 && fromAedCurrentPage * ITEMS_PER_PAGE < currencies.length) {
+                loadFromAedCards();
+            }
+            
+            // Check if user scrolled near the bottom of To AED section
+            const toAedRect = toAedContainer.getBoundingClientRect();
+            if (toAedRect.bottom <= window.innerHeight + 200 && toAedCurrentPage * ITEMS_PER_PAGE < currencies.length) {
+                loadToAedCards();
+            }
+        }
+        
+        // Load more button handlers
+        document.getElementById('loadMoreFromAed').addEventListener('click', loadFromAedCards);
+        document.getElementById('loadMoreToAed').addEventListener('click', loadToAedCards);
+    </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: currency-exchange
+    runtime: python3
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn --bind 0.0.0.0:$PORT app:app"
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOAD_SAMPLE_DATA
+        value: "false"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///currency_exchange.db
+
+databases:
+  - name: currency-exchange-db
+    databaseName: currency_exchange
+    user: currency_user

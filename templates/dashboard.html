@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Currency Exchange Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-tachometer-alt me-2"></i>Currency Management Dashboard</h2>
+        <p class="text-muted">Manage currency exchange rates to and from UAE Dirham (AED)</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-plus me-2"></i>Add New Currency</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_currency') }}">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Currency Name</label>
+                        <input type="text" class="form-control" id="name" name="name" placeholder="e.g., US Dollar" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="symbol" class="form-label">Symbol</label>
+                        <input type="text" class="form-control" id="symbol" name="symbol" placeholder="e.g., USD" maxlength="10" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="rate_to_aed" class="form-label">Rate to AED</label>
+                        <input type="number" class="form-control" id="rate_to_aed" name="rate_to_aed" 
+                               step="0.000001" placeholder="e.g., 0.27" required>
+                        <div class="form-text">How much of this currency equals 1 AED</div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">
+                        <i class="fas fa-plus me-2"></i>Add Currency
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list me-2"></i>Existing Currencies</h5>
+            </div>
+            <div class="card-body">
+                {% if currencies %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Symbol <i class="fas fa-sort-alpha-down text-muted"></i></th>
+                                <th>Name</th>
+                                <th>Rate to AED</th>
+                                <th>Rate from AED</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for currency in currencies %}
+                            <tr>
+                                <td><strong>{{ currency.symbol }}</strong></td>
+                                <td>{{ currency.name }}</td>
+                                <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed) }}</td>
+                                <td class="currency-rate">{{ "%.6f"|format(1/currency.rate_to_aed) }}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-primary" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#editModal{{ currency.id }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger" 
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#deleteModal{{ currency.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted">
+                    <i class="fas fa-coins fa-3x mb-3"></i>
+                    <p>No currencies added yet. Add your first currency using the form on the left.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modals -->
+{% for currency in currencies %}
+<div class="modal fade" id="editModal{{ currency.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit {{ currency.symbol }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('update_currency', currency_id=currency.id) }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_name{{ currency.id }}" class="form-label">Currency Name</label>
+                        <input type="text" class="form-control" id="edit_name{{ currency.id }}" 
+                               name="name" value="{{ currency.name }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_rate{{ currency.id }}" class="form-label">Rate to AED</label>
+                        <input type="number" class="form-control" id="edit_rate{{ currency.id }}" 
+                               name="rate_to_aed" value="{{ currency.rate_to_aed }}" step="0.000001" required>
+                        <div class="form-text">How much of this currency equals 1 AED</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Currency</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Delete Modals -->
+{% for currency in currencies %}
+<div class="modal fade" id="deleteModal{{ currency.id }}" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete {{ currency.symbol }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>{{ currency.name }} ({{ currency.symbol }})</strong>?</p>
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('delete_currency', currency_id=currency.id) }}" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Delete Currency</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endblock %}
