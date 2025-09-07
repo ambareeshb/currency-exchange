@@ -3,10 +3,11 @@ Database migrations for Currency Exchange Admin App
 """
 import os
 from werkzeug.security import generate_password_hash
-from app import app, db, AdminUser
 
 def run_migrations():
     """Run all database migrations"""
+    from app import app, db, AdminUser
+    
     with app.app_context():
         # Create all tables
         db.create_all()
@@ -18,6 +19,8 @@ def run_migrations():
 
 def migration_001_create_admin_user():
     """Migration 001: Create admin user from environment variables"""
+    from app import AdminUser, db
+    
     admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
     admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
     
@@ -56,6 +59,10 @@ def load_sample_data():
         print("Sample currency data loaded")
 
 if __name__ == '__main__':
+    # Load environment variables
+    from dotenv import load_dotenv
+    load_dotenv()
+    
     run_migrations()
     
     # Load sample data if requested
