@@ -18,9 +18,12 @@ services:
       - key: ADMIN_PASSWORD
         generateValue: true
       - key: DATABASE_URL
-        value: sqlite:///currency_exchange.db
+        fromDatabase:
+          name: currency-exchange-db
+          property: connectionString
 
 databases:
   - name: currency-exchange-db
     databaseName: currency_exchange
     user: currency_user
+    plan: free
