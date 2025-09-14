@@ -123,6 +123,91 @@ sudo systemctl restart currency-exchange nginx
 
 ---
 
+## File Locations on EC2 Instance
+
+After deployment, your files are located in `/opt/currency-exchange`:
+
+### **Navigate to Application Directory:**
+```bash
+# SSH into your EC2 instance
+ssh -i your-key.pem ec2-user@your-ec2-ip
+
+# Go to application directory
+cd /opt/currency-exchange
+
+# List all files
+ls -la
+
+# You should see:
+# app.py, migrations.py, requirements.txt, .env.aws, .env.production
+# venv/ (virtual environment folder)
+# templates/ (HTML templates)
+# instance/ (SQLite database if using local DB)
+```
+
+### **Key File Locations:**
+```bash
+# Application files
+/opt/currency-exchange/app.py                    # Main Flask application
+/opt/currency-exchange/migrations.py             # Database migrations
+/opt/currency-exchange/requirements.txt          # Python dependencies
+/opt/currency-exchange/.env.aws                  # Template environment file
+/opt/currency-exchange/.env.production           # Real credentials (created by script)
+
+# Virtual environment
+/opt/currency-exchange/venv/                     # Python virtual environment
+
+# Templates and static files
+/opt/currency-exchange/templates/               # HTML templates
+/opt/currency-exchange/instance/                # Local database files (if any)
+
+# System service files
+/etc/systemd/system/currency-exchange.service   # systemd service configuration
+/etc/nginx/conf.d/currency-exchange.conf        # Nginx configuration
+
+# Logs
+/var/log/nginx/access.log                       # Nginx access logs
+/var/log/nginx/error.log                        # Nginx error logs
+# Use: sudo journalctl -u currency-exchange -f   # Application logs
+```
+
+### **Common Commands:**
+```bash
+# Check if files exist
+ls -la /opt/currency-exchange/
+
+# View application code
+cat /opt/currency-exchange/app.py
+
+# Check environment configuration
+cat /opt/currency-exchange/.env.production
+
+# Check if virtual environment exists
+ls /opt/currency-exchange/venv/
+
+# Activate virtual environment
+cd /opt/currency-exchange
+source venv/bin/activate
+
+# Check Python packages
+pip list
+```
+
+### **If Files Are Missing:**
+```bash
+# Check if git clone worked
+cd /opt/currency-exchange
+git status
+
+# If directory is empty, clone manually
+git clone https://github.com/yourusername/currency-exchange.git .
+
+# If permission issues
+sudo chown -R ec2-user:ec2-user /opt/currency-exchange
+```
+
+---
+
 ## Manual Setup (Alternative)
 
 If you prefer manual setup:
@@ -147,8 +232,19 @@ pip install -r requirements.txt
 
 ### 3. Configure Environment:
 ```bash
-# Edit .env.aws with your RDS details
-DATABASE_URL=postgresql://currencyuser:password@your-rds-endpoint:5432/currency_exchange
+# DO NOT edit .env.aws in the repository (it will be public on GitHub)
+# Instead, create environment file on the server:
+
+# Copy template and edit with real values
+cp .env.aws .env.production
+
+# Edit with your actual credentials (this file stays on server only)
+nano .env.production
+
+# Update these values:
+# DATABASE_URL=postgresql://currencyuser:YOUR_REAL_PASSWORD@your-rds-endpoint:5432/currency_exchange
+# ADMIN_PASSWORD=YOUR_SECURE_ADMIN_PASSWORD
+# SECRET_KEY=YOUR_GENERATED_SECRET_KEY
 ```
 
 ### 4. Setup Services:
@@ -164,7 +260,7 @@ Type=simple
 User=ec2-user
 WorkingDirectory=/opt/currency-exchange
 Environment=PATH=/opt/currency-exchange/venv/bin
-EnvironmentFile=/opt/currency-exchange/.env.aws
+EnvironmentFile=/opt/currency-exchange/.env.production
 ExecStart=/opt/currency-exchange/venv/bin/gunicorn --bind 127.0.0.1:5001 --workers 3 app:app
 Restart=always
 RestartSec=3
@@ -503,6 +599,94 @@ sudo systemctl daemon-reload
 ---
 
 ## Troubleshooting
+
+### Migration Issues
+
+**Problem**: "All migrations completed successfully" but no data/tables created
+
+**Debugging Steps:**
+
+1. **Check Database Connection**:
+```bash
+# Test if you can connect to the database
+psql -h your-rds-endpoint -U currencyuser -d currency_exchange
+
+# Inside psql, check if tables exist:
+\dt
+# Should show: admin_users, currency tables
+
+# Check if admin user was created:
+SELECT * FROM admin_users;
+```
+
+2. **Check Environment Variables**:
+```bash
+# Verify environment file is loaded
+cat /opt/currency-exchange/.env.aws
+
+# Check if systemd service loads environment correctly
+sudo systemctl show currency-exchange --property=Environment
+```
+
+3. **Run Migrations Manually**:
+```bash
+cd /opt/currency-exchange
+source venv/bin/activate
+
+# Load environment variables manually
+export $(cat .env.aws | xargs)
+
+# Run migrations with debug output
+python migrations.py
+
+# Check what's in the database after migration
+python -c "
+from app import app, db, AdminUser, Currency
+with app.app_context():
+    print('Admin users:', AdminUser.query.all())
+    print('Currencies:', Currency.query.all())
+"
+```
+
+4. **Common Migration Issues**:
+
+**Issue**: Database connection fails
+```bash
+# Check if RDS security group allows EC2 access
+# Verify DATABASE_URL format:
+# postgresql://username:password@endpoint:5432/database_name
+```
+
+**Issue**: Tables not created
+```bash
+# Force table creation
+python -c "
+from app import app, db
+with app.app_context():
+    db.drop_all()  # CAUTION: This deletes all data
+    db.create_all()
+    print('Tables recreated')
+"
+```
+
+**Issue**: Admin user not created
+```bash
+# Check environment variables are set
+echo $ADMIN_USERNAME
+echo $ADMIN_PASSWORD
+
+# Manually create admin user
+python -c "
+from app import app, db, AdminUser
+import os
+with app.app_context():
+    admin = AdminUser(username=os.environ.get('ADMIN_USERNAME', 'admin'))
+    admin.set_password(os.environ.get('ADMIN_PASSWORD', 'admin123'))
+    db.session.add(admin)
+    db.session.commit()
+    print('Admin user created manually')
+"
+```
 
 ### Service Issues:
 ```bash

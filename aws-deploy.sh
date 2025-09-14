@@ -97,9 +97,9 @@ if [ "$INITIAL_SETUP" = true ]; then
     SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
     ADMIN_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
 
-    # Create environment file
-    print_status "Creating environment configuration..."
-    cat > .env.aws << EOF
+    # Create production environment file (not committed to GitHub)
+    print_status "Creating production environment configuration..."
+    cat > .env.production << EOF
 FLASK_ENV=production
 DEBUG=false
 PORT=5001
@@ -135,7 +135,7 @@ Type=simple
 User=ec2-user
 WorkingDirectory=$APP_DIR
 Environment=PATH=$APP_DIR/venv/bin
-EnvironmentFile=$APP_DIR/.env.aws
+EnvironmentFile=$APP_DIR/.env.production
 ExecStart=$APP_DIR/venv/bin/gunicorn --bind 127.0.0.1:5001 --workers 3 app:app
 Restart=always
 RestartSec=3
