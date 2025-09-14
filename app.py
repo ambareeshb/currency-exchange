@@ -81,8 +81,8 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
         'check_same_thread': False,  # For SQLite threading safety
         'timeout': 20  # Database timeout
     } if 'sqlite' in os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db') else {
-        'connect_timeout': 20,
-        'pool_timeout': 20
+        'connect_timeout': 20
+        # Note: pool_timeout is a SQLAlchemy parameter, not a psycopg2 connection parameter
     }
 }
 
