@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from flask_socketio import SocketIO, emit
 from werkzeug.security import check_password_hash, generate_password_hash
 import os
 from dotenv import load_dotenv
@@ -14,6 +15,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:/
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -115,6 +117,15 @@ def add_currency():
     currency = Currency(name=name, symbol=symbol, rate_to_aed=rate_to_aed)
     db.session.add(currency)
     db.session.commit()
+    
+    # Emit real-time update to all connected clients
+    socketio.emit('currency_added', {
+        'id': currency.id,
+        'name': currency.name,
+        'symbol': currency.symbol,
+        'rate_to_aed': currency.rate_to_aed
+    })
+    
     flash(f'Currency {symbol} added successfully', 'success')
     return redirect(url_for('dashboard'))
 
@@ -126,6 +137,15 @@ def update_currency(currency_id):
     currency.rate_to_aed = float(request.form['rate_to_aed'])
     
     db.session.commit()
+    
+    # Emit real-time update to all connected clients
+    socketio.emit('currency_updated', {
+        'id': currency.id,
+        'name': currency.name,
+        'symbol': currency.symbol,
+        'rate_to_aed': currency.rate_to_aed
+    })
+    
     flash(f'Currency {currency.symbol} updated successfully', 'success')
     return redirect(url_for('dashboard'))
 
@@ -134,8 +154,17 @@ def update_currency(currency_id):
 def delete_currency(currency_id):
     currency = Currency.query.get_or_404(currency_id)
     symbol = currency.symbol
+    currency_data = {
+        'id': currency.id,
+        'symbol': currency.symbol
+    }
+    
     db.session.delete(currency)
     db.session.commit()
+    
+    # Emit real-time update to all connected clients
+    socketio.emit('currency_deleted', currency_data)
+    
     flash(f'Currency {symbol} deleted successfully', 'success')
     return redirect(url_for('dashboard'))
 
@@ -170,4 +199,4 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
     
-    app.run(debug=debug, port=port, host='0.0.0.0')
+    socketio.run(app, debug=debug, port=port, host='0.0.0.0')
