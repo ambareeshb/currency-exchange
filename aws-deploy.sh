@@ -370,6 +370,65 @@ else
 
     print_status "Updating dependencies..."
     pip install -r requirements.txt
+    
+    # Ensure log directories exist during updates
+    print_status "Creating/updating log directories..."
+    sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    sudo chown ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    
+    # Create log files if they don't exist
+    sudo touch /var/log/gunicorn/access.log /var/log/gunicorn/error.log
+    sudo chown ec2-user:ec2-user /var/log/gunicorn/access.log /var/log/gunicorn/error.log
+    
+    # Ensure recovery services are created/updated during updates too
+    print_status "Creating/updating socket recovery services..."
+    
+    # Create socket recovery service
+    sudo tee /etc/systemd/system/currency-exchange-recovery.service > /dev/null << EOF
+[Unit]
+Description=Currency Exchange Socket Recovery Service
+After=currency-exchange.service
+Requires=currency-exchange.service
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=$APP_DIR
+Environment=PATH=$APP_DIR/venv/bin
+ExecStart=$APP_DIR/venv/bin/python $APP_DIR/socket_recovery.py --daemon
+Restart=always
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Create socket recovery timer for regular checks
+    sudo tee /etc/systemd/system/currency-exchange-recovery.timer > /dev/null << EOF
+[Unit]
+Description=Currency Exchange Socket Recovery Timer
+Requires=currency-exchange-recovery.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=2min
+Unit=currency-exchange-recovery.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    # Enable recovery services
+    sudo systemctl daemon-reload
+    sudo systemctl enable currency-exchange-recovery
+    sudo systemctl enable currency-exchange-recovery.timer
+    
+    # Make scripts executable
+    chmod +x $APP_DIR/monitor.sh
+    chmod +x $APP_DIR/socket_recovery.py
 fi
 
 # Common steps for both setup and update

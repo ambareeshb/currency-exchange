@@ -24,9 +24,58 @@ max_requests = 500  # More frequent worker restarts
 max_requests_jitter = 50
 preload_app = True
 
-# Logging with enhanced error tracking
-accesslog = "/var/log/gunicorn/access.log"
-errorlog = "/var/log/gunicorn/error.log"
+# Logging with enhanced error tracking and fallback
+import os
+import sys
+
+def setup_logging():
+    """Setup logging with proper fallback handling"""
+    log_dir = "/var/log/gunicorn"
+    
+    # Try to create log directory if it doesn't exist
+    try:
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir, mode=0o755, exist_ok=True)
+            # Try to change ownership to ec2-user if running as root
+            try:
+                import pwd
+                import grp
+                ec2_user = pwd.getpwnam('ec2-user')
+                os.chown(log_dir, ec2_user.pw_uid, ec2_user.pw_gid)
+            except (KeyError, PermissionError, OSError):
+                pass  # Ignore if we can't change ownership
+    except (PermissionError, OSError) as e:
+        print(f"Warning: Could not create log directory {log_dir}: {e}", file=sys.stderr)
+    
+    # Check if we can write to the log directory
+    if os.path.exists(log_dir) and os.access(log_dir, os.W_OK):
+        access_log_path = os.path.join(log_dir, "access.log")
+        error_log_path = os.path.join(log_dir, "error.log")
+        
+        # Try to create log files if they don't exist
+        try:
+            for log_file in [access_log_path, error_log_path]:
+                if not os.path.exists(log_file):
+                    with open(log_file, 'a'):
+                        pass
+                    # Try to change ownership
+                    try:
+                        import pwd
+                        ec2_user = pwd.getpwnam('ec2-user')
+                        os.chown(log_file, ec2_user.pw_uid, ec2_user.pw_gid)
+                    except (KeyError, PermissionError, OSError):
+                        pass
+            
+            return access_log_path, error_log_path
+        except (PermissionError, OSError) as e:
+            print(f"Warning: Could not create log files: {e}", file=sys.stderr)
+    
+    # Fallback to systemd journal/stdout/stderr
+    print("Falling back to stdout/stderr logging", file=sys.stderr)
+    return "-", "-"
+
+# Setup logging
+accesslog, errorlog = setup_logging()
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s %(p)s'
 
