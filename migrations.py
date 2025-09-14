@@ -3,6 +3,7 @@ Database migrations for Currency Exchange Admin App
 """
 import os
 from werkzeug.security import generate_password_hash
+from sqlalchemy import text
 
 def run_migrations():
     """Run all database migrations"""
@@ -24,7 +25,8 @@ def run_migrations():
         
         # Check what tables were created
         try:
-            tables = db.engine.table_names()
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
             print(f"Tables created: {tables}")
         except Exception as e:
             print(f"Could not list tables: {e}")
@@ -40,13 +42,25 @@ def migration_001_update_password_hash_length():
     from app import db
     
     try:
-        # Check if admin_users table exists
-        result = db.engine.execute("SELECT table_name FROM information_schema.tables WHERE table_name = 'admin_users';")
-        if result.fetchone():
+        # Check if admin_users table exists using SQLAlchemy inspector
+        inspector = db.inspect(db.engine)
+        if 'admin_users' in inspector.get_table_names():
             print("Found existing admin_users table, updating password_hash column...")
-            # Update the column length
-            db.engine.execute("ALTER TABLE admin_users ALTER COLUMN password_hash TYPE VARCHAR(255);")
-            print("✅ Updated password_hash column length to 255 characters")
+            # Check if we're using PostgreSQL or SQLite
+            if db.engine.dialect.name == 'postgresql':
+                with db.engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE admin_users ALTER COLUMN password_hash TYPE VARCHAR(255);"))
+                    connection.commit()
+                    print("✅ Updated password_hash column length to 255 characters (PostgreSQL)")
+            elif db.engine.dialect.name == 'sqlite':
+                # SQLite doesn't support ALTER COLUMN, so we need to recreate the table
+                print("SQLite detected - will recreate table with correct schema")
+                with db.engine.connect() as connection:
+                    connection.execute(text("DROP TABLE IF EXISTS admin_users;"))
+                    connection.commit()
+                    print("Dropped existing admin_users table (SQLite)")
+            else:
+                print(f"Unknown database dialect: {db.engine.dialect.name}")
         else:
             print("admin_users table doesn't exist yet, will be created with correct schema")
     except Exception as e:
@@ -54,8 +68,13 @@ def migration_001_update_password_hash_length():
         # If update fails, drop and recreate the table
         try:
             print("Attempting to recreate admin_users table...")
-            db.engine.execute("DROP TABLE IF EXISTS admin_users CASCADE;")
-            print("Dropped existing admin_users table")
+            with db.engine.connect() as connection:
+                if db.engine.dialect.name == 'postgresql':
+                    connection.execute(text("DROP TABLE IF EXISTS admin_users CASCADE;"))
+                else:
+                    connection.execute(text("DROP TABLE IF EXISTS admin_users;"))
+                connection.commit()
+                print("Dropped existing admin_users table")
         except Exception as drop_error:
             print(f"Could not drop table: {drop_error}")
 
