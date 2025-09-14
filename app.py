@@ -73,10 +73,17 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_timeout': 20,     # Timeout for getting connection from pool
     'max_overflow': 0,      # Don't allow overflow connections
     'echo': False,          # Set to True for SQL debugging
+    # Critical threading fixes
+    'pool_reset_on_return': 'commit',  # Reset connections on return
+    'pool_size': 5,         # Limit pool size to prevent contention
     # Threading-safe connection handling
     'connect_args': {
-        'check_same_thread': False  # For SQLite threading safety
-    } if 'sqlite' in os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db') else {}
+        'check_same_thread': False,  # For SQLite threading safety
+        'timeout': 20  # Database timeout
+    } if 'sqlite' in os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db') else {
+        'connect_timeout': 20,
+        'pool_timeout': 20
+    }
 }
 
 # Configure Flask logging with socket error handling
@@ -90,9 +97,18 @@ db = SQLAlchemy(app)
 def close_db_session(error):
     """Ensure database sessions are properly closed after each request"""
     try:
+        # Force rollback any pending transactions
+        if db.session.is_active:
+            db.session.rollback()
+        # Remove the session from the registry
         db.session.remove()
     except Exception as e:
         app.logger.warning(f"Error closing database session: {e}")
+        # Force cleanup even if there's an error
+        try:
+            db.session.close()
+        except:
+            pass
 
 # Database connection health check
 def check_db_connection():
@@ -107,6 +123,46 @@ def check_db_connection():
         except:
             pass
         return False
+
+# Connection pool recovery function
+def recover_db_pool():
+    """Recover database connection pool from threading issues"""
+    try:
+        app.logger.info("Attempting to recover database connection pool...")
+        
+        # Force close all connections in the pool
+        db.engine.dispose()
+        
+        # Clear any pending sessions
+        db.session.remove()
+        
+        # Test new connection
+        with db.engine.connect() as conn:
+            conn.execute('SELECT 1')
+        
+        app.logger.info("Database connection pool recovered successfully")
+        return True
+    except Exception as e:
+        app.logger.error(f"Failed to recover database pool: {e}")
+        return False
+
+# Enhanced database operation wrapper
+def safe_db_operation(operation_func, *args, **kwargs):
+    """Safely execute database operations with automatic recovery"""
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            return operation_func(*args, **kwargs)
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'cannot notify on un-acquired lock' in error_msg or 'bad file descriptor' in error_msg:
+                app.logger.warning(f"Database threading issue detected (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    # Try to recover the pool
+                    recover_db_pool()
+                    continue
+            raise e
+    raise Exception(f"Failed after {max_retries} attempts")
 
 # Enhanced SocketIO configuration with better error handling
 socketio = SocketIO(
@@ -183,6 +239,9 @@ def handle_exception(e):
         db.session.remove()
     except Exception as cleanup_error:
         app.logger.error(f'Error during database cleanup: {cleanup_error}')
+        # Try pool recovery if it's a threading issue
+        if 'cannot notify on un-acquired lock' in str(cleanup_error):
+            recover_db_pool()
     
     return render_template('base.html'), 500
 
@@ -218,10 +277,24 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    admin_user = AdminUser.query.filter_by(username=user_id).first()
-    if admin_user:
-        return User(admin_user.username)
-    return None
+    """Thread-safe user loader with proper session management"""
+    def _load_user():
+        admin_user = AdminUser.query.filter_by(username=user_id).first()
+        if admin_user:
+            return User(admin_user.username)
+        return None
+    
+    try:
+        return safe_db_operation(_load_user)
+    except Exception as e:
+        app.logger.error(f"Error loading user {user_id}: {e}")
+        # Clean up the session on error
+        try:
+            db.session.rollback()
+            db.session.remove()
+        except:
+            pass
+        return None
 
 class Currency(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -289,7 +362,10 @@ class Currency(db.Model):
 
 @app.route('/')
 def index():
-    currencies_db = Currency.query.order_by(Currency.symbol.asc()).all()
+    def _get_currencies():
+        return Currency.query.order_by(Currency.symbol.asc()).all()
+    
+    currencies_db = safe_db_operation(_get_currencies)
     currencies = [
         {
             'id': c.id,
