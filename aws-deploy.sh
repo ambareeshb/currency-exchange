@@ -111,6 +111,9 @@ ADMIN_PASSWORD=$ADMIN_PASSWORD
 AWS_REGION=us-east-1
 EOF
 
+    print_status "Environment file created. Contents:"
+    cat .env.production
+
     print_warning "Admin Credentials - SAVE THESE:"
     print_warning "Username: admin"
     print_warning "Password: $ADMIN_PASSWORD"

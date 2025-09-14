@@ -40,12 +40,24 @@ def migration_001_update_password_hash_length():
     from app import db
     
     try:
-        # Check if admin_users table exists and update password_hash column
-        db.engine.execute("ALTER TABLE admin_users ALTER COLUMN password_hash TYPE VARCHAR(255);")
-        print("Updated password_hash column length to 255 characters")
+        # Check if admin_users table exists
+        result = db.engine.execute("SELECT table_name FROM information_schema.tables WHERE table_name = 'admin_users';")
+        if result.fetchone():
+            print("Found existing admin_users table, updating password_hash column...")
+            # Update the column length
+            db.engine.execute("ALTER TABLE admin_users ALTER COLUMN password_hash TYPE VARCHAR(255);")
+            print("✅ Updated password_hash column length to 255 characters")
+        else:
+            print("admin_users table doesn't exist yet, will be created with correct schema")
     except Exception as e:
-        # Table might not exist yet, which is fine
-        print(f"Password hash column update skipped: {e}")
+        print(f"Password hash column update failed: {e}")
+        # If update fails, drop and recreate the table
+        try:
+            print("Attempting to recreate admin_users table...")
+            db.engine.execute("DROP TABLE IF EXISTS admin_users CASCADE;")
+            print("Dropped existing admin_users table")
+        except Exception as drop_error:
+            print(f"Could not drop table: {drop_error}")
 
 def migration_002_create_admin_user():
     """Migration 002: Create admin user from environment variables"""
