@@ -74,14 +74,13 @@ database_url = os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db')
 is_sqlite = 'sqlite' in database_url
 
 if is_sqlite:
-    # For SQLite: Use StaticPool with proper threading configuration
+    # For SQLite: Use NullPool to completely avoid connection pool threading issues
     app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'poolclass': StaticPool,
+        'poolclass': NullPool,  # Create new connection for each request - safer for threading
         'pool_pre_ping': True,
-        'pool_recycle': -1,  # Don't recycle connections for SQLite
         'connect_args': {
             'check_same_thread': False,  # Allow SQLite to be used across threads
-            'timeout': 30,  # Increase timeout for SQLite
+            'timeout': 60,  # Increase timeout for SQLite
             'isolation_level': None,  # Use autocommit mode
         },
         'echo': False
@@ -92,7 +91,7 @@ else:
         'poolclass': NullPool,  # Create new connection for each request
         'pool_pre_ping': True,
         'connect_args': {
-            'connect_timeout': 30,
+            'connect_timeout': 60,
             'application_name': f'currency_exchange_port_{os.environ.get("PORT", "5001")}'
         },
         'echo': False
@@ -109,28 +108,33 @@ db = SQLAlchemy(app)
 def close_db_session(error):
     """Ensure database sessions are properly closed after each request"""
     try:
-        # Check if session exists and is active
-        if hasattr(db.session, 'is_active') and db.session.is_active:
-            if error:
+        # Always try to remove the session, regardless of state
+        # With NullPool, this is safer as each request gets a fresh connection
+        if error:
+            try:
                 db.session.rollback()
-            else:
+            except Exception as rollback_error:
+                app.logger.warning(f"Error rolling back session: {rollback_error}")
+        else:
+            try:
+                db.session.commit()
+            except Exception as commit_error:
+                app.logger.warning(f"Error committing session: {commit_error}")
                 try:
-                    db.session.commit()
-                except Exception as commit_error:
-                    app.logger.warning(f"Error committing session: {commit_error}")
                     db.session.rollback()
+                except Exception as rollback_error:
+                    app.logger.warning(f"Error rolling back after commit failure: {rollback_error}")
         
         # Always remove the session from the registry
         db.session.remove()
         
     except Exception as e:
-        app.logger.warning(f"Error closing database session: {e}")
+        app.logger.warning(f"Error in session teardown: {e}")
         # Force cleanup even if there's an error
         try:
-            db.session.rollback()
             db.session.remove()
         except Exception as cleanup_error:
-            app.logger.warning(f"Error in session cleanup: {cleanup_error}")
+            app.logger.warning(f"Error in final session cleanup: {cleanup_error}")
 
 # Database connection health check
 def check_db_connection():
@@ -159,24 +163,9 @@ def recover_db_pool():
         # Clear any pending sessions from all threads
         db.session.remove()
         
-        # For SQLite with StaticPool, we need to recreate the engine
-        if is_sqlite:
-            # Recreate the engine with fresh configuration
-            from sqlalchemy import create_engine
-            new_engine = create_engine(
-                database_url,
-                poolclass=StaticPool,
-                pool_pre_ping=True,
-                pool_recycle=-1,
-                connect_args={
-                    'check_same_thread': False,
-                    'timeout': 30,
-                    'isolation_level': None,
-                },
-                echo=False
-            )
-            db.engine = new_engine
-            
+        # Since we're using NullPool now, we don't need to recreate the engine
+        # NullPool creates fresh connections for each request
+        
         # Test new connection with timeout
         import time
         start_time = time.time()
@@ -199,9 +188,14 @@ def safe_db_operation(operation_func, *args, **kwargs):
     
     for attempt in range(max_retries):
         try:
-            # Use a fresh session for each attempt
+            # Always use a fresh session for each attempt with NullPool
             if attempt > 0:
-                db.session.remove()
+                try:
+                    db.session.remove()
+                    # Force engine disposal to clear any stale connections
+                    db.engine.dispose()
+                except:
+                    pass
                 
             return operation_func(*args, **kwargs)
             
@@ -214,14 +208,24 @@ def safe_db_operation(operation_func, *args, **kwargs):
                 'cannot wait on un-acquired lock',
                 'bad file descriptor',
                 'database is locked',
-                'connection pool limit'
+                'connection pool limit',
+                'pool limit of size',
+                'queuepool limit',
+                'connection invalidated'
             ]):
                 app.logger.warning(f"Database threading issue detected (attempt {attempt + 1}/{max_retries}): {e}")
                 
-                # Clean up current session
+                # Clean up current session aggressively
                 try:
                     db.session.rollback()
+                except:
+                    pass
+                try:
                     db.session.remove()
+                except:
+                    pass
+                try:
+                    db.engine.dispose()
                 except:
                     pass
                 
@@ -229,7 +233,7 @@ def safe_db_operation(operation_func, *args, **kwargs):
                     # Try to recover the pool and wait a bit
                     recover_db_pool()
                     import time
-                    time.sleep(0.1 * (attempt + 1))  # Progressive backoff
+                    time.sleep(0.2 * (attempt + 1))  # Progressive backoff
                     continue
                     
             # For non-threading errors, don't retry
@@ -374,8 +378,8 @@ def load_user(user_id):
     if not user_id:
         return None
     
-    try:
-        # Use a fresh session for user loading to avoid threading issues
+    def _load_user_operation():
+        # Use a fresh connection for user loading to avoid threading issues
         with db.engine.connect() as conn:
             from sqlalchemy import text
             result = conn.execute(
@@ -386,7 +390,9 @@ def load_user(user_id):
             if row:
                 return User(row[0])
         return None
-        
+    
+    try:
+        return safe_db_operation(_load_user_operation)
     except Exception as e:
         app.logger.error(f"Error loading user {user_id}: {e}")
         return None
@@ -839,7 +845,7 @@ def on_connect():
         app.logger.warning(f'Error in connect handler: {e}')
 
 @socketio.on('disconnect')
-def on_disconnect(reason):
+def on_disconnect(reason=None):
     """Enhanced disconnect handler with graceful cleanup"""
     try:
         app.logger.info(f'Client disconnected: {request.sid}, reason: {reason}')
