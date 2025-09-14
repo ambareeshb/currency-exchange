@@ -4,21 +4,57 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_socketio import SocketIO, emit
 from werkzeug.security import check_password_hash, generate_password_hash
 import os
+import logging
+import signal
+import sys
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s %(name)s %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('/var/log/currency-exchange/app.log') if os.path.exists('/var/log/currency-exchange') else logging.StreamHandler(sys.stdout)
+    ]
+)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Configure Flask logging
+app.logger.setLevel(logging.INFO)
+
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Error handlers
+@app.errorhandler(500)
+def internal_error(error):
+    app.logger.error(f'Server Error: {error}')
+    db.session.rollback()
+    return render_template('base.html'), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    app.logger.warning(f'Page not found: {request.url}')
+    return render_template('base.html'), 404
+
+# Signal handlers for graceful shutdown
+def signal_handler(sig, frame):
+    app.logger.info('Received shutdown signal, cleaning up...')
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
 
 class AdminUser(db.Model):
     __tablename__ = 'admin_users'
@@ -367,17 +403,60 @@ def admin_redirect():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    try:
+        # Test database connection
+        db.session.execute('SELECT 1')
+        
+        # Test basic app functionality
+        currency_count = Currency.query.count()
+        
+        return {
+            'status': 'healthy',
+            'timestamp': db.func.current_timestamp(),
+            'database': 'connected',
+            'currencies': currency_count,
+            'version': '1.0.0'
+        }, 200
+    except Exception as e:
+        app.logger.error(f'Health check failed: {e}')
+        return {
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': db.func.current_timestamp()
+        }, 503
+
 def init_db_and_migrations():
     """Initialize database and run migrations"""
     from migrations import run_migrations
     run_migrations()
 
+# SocketIO error handlers
+@socketio.on_error_default
+def default_error_handler(e):
+    app.logger.error(f'SocketIO error: {e}')
+
+@socketio.on('connect')
+def on_connect():
+    app.logger.info(f'Client connected: {request.sid}')
+
+@socketio.on('disconnect')
+def on_disconnect():
+    app.logger.info(f'Client disconnected: {request.sid}')
+
 if __name__ == '__main__':
-    # Initialize database and run migrations
-    init_db_and_migrations()
-    
-    # Get configuration from environment
-    port = int(os.environ.get('PORT', 5001))
-    debug = os.environ.get('DEBUG', 'false').lower() == 'true'
-    
-    socketio.run(app, debug=debug, port=port, host='0.0.0.0')
+    try:
+        # Initialize database and run migrations
+        init_db_and_migrations()
+        
+        # Get configuration from environment
+        port = int(os.environ.get('PORT', 5001))
+        debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+        
+        app.logger.info(f'Starting Currency Exchange app on port {port}')
+        socketio.run(app, debug=debug, port=port, host='0.0.0.0')
+    except Exception as e:
+        app.logger.error(f'Failed to start application: {e}')
+        sys.exit(1)

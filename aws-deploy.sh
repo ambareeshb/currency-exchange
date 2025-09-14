@@ -126,6 +126,11 @@ EOF
         print_warning "⚠️  Database connection failed. Check RDS configuration."
     fi
 
+    # Create log directories
+    print_status "Creating log directories..."
+    sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    sudo chown ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+
     # Create systemd service
     print_status "Creating systemd service..."
     sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
@@ -136,12 +141,18 @@ After=network.target
 [Service]
 Type=simple
 User=ec2-user
+Group=ec2-user
 WorkingDirectory=$APP_DIR
 Environment=PATH=$APP_DIR/venv/bin
 EnvironmentFile=$APP_DIR/.env.production
-ExecStart=$APP_DIR/venv/bin/gunicorn --worker-class eventlet -w 1 --bind 127.0.0.1:5001 app:app
+ExecStart=$APP_DIR/venv/bin/gunicorn --config $APP_DIR/gunicorn.conf.py app:app
+ExecReload=/bin/kill -s HUP \$MAINPID
+KillMode=mixed
+TimeoutStopSec=30
 Restart=always
-RestartSec=3
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
@@ -151,13 +162,29 @@ EOF
     print_header "Domain Configuration"
     read -p "Enter your domain name (or press Enter to skip): " DOMAIN_NAME
 
-    # Create Nginx configuration
+    # Create Nginx configuration with improved settings
     print_status "Creating Nginx configuration..."
     if [ -n "$DOMAIN_NAME" ]; then
         sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << EOF
 server {
     listen 80;
     server_name $DOMAIN_NAME www.$DOMAIN_NAME;
+    
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    
+    # Timeouts to prevent socket errors
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    
+    # Buffer settings
+    proxy_buffering on;
+    proxy_buffer_size 128k;
+    proxy_buffers 4 256k;
+    proxy_busy_buffers_size 256k;
 
     location / {
         proxy_pass http://127.0.0.1:5001;
@@ -168,6 +195,15 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # Handle client disconnections gracefully
+        proxy_ignore_client_abort on;
+    }
+    
+    # Health check endpoint
+    location /health {
+        access_log off;
+        proxy_pass http://127.0.0.1:5001/health;
     }
 }
 EOF
@@ -176,6 +212,22 @@ EOF
 server {
     listen 80 default_server;
     server_name _;
+    
+    # Security headers
+    add_header X-Frame-Options DENY;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    
+    # Timeouts to prevent socket errors
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 60s;
+    proxy_read_timeout 60s;
+    
+    # Buffer settings
+    proxy_buffering on;
+    proxy_buffer_size 128k;
+    proxy_buffers 4 256k;
+    proxy_busy_buffers_size 256k;
 
     location / {
         proxy_pass http://127.0.0.1:5001;
@@ -186,6 +238,15 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        
+        # Handle client disconnections gracefully
+        proxy_ignore_client_abort on;
+    }
+    
+    # Health check endpoint
+    location /health {
+        access_log off;
+        proxy_pass http://127.0.0.1:5001/health;
     }
 }
 EOF
