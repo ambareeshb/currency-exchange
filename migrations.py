@@ -86,8 +86,11 @@ def migration_002_create_admin_user():
     """Migration 002: Create admin user from environment variables"""
     from app import AdminUser, db
     
-    admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
-    admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
+    admin_username = os.environ.get('ADMIN_USERNAME')
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    
+    if not admin_username or not admin_password:
+        raise ValueError("ADMIN_USERNAME and ADMIN_PASSWORD environment variables must be set for production deployment")
     
     # Check if admin user already exists
     existing_admin = AdminUser.query.filter_by(username=admin_username).first()

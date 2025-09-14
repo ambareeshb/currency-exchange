@@ -27,7 +27,8 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Run application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "app:app"]
+# Run application with systemd journal logging
+# All logs go to stdout/stderr which systemd captures to journal
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]

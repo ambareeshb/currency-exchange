@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # AWS EC2 Deployment Script for Currency Exchange App
-# This script handles both initial setup and updates
+# This script handles both initial setup and updates with enhanced security and systemd journal logging
 
 set -e
 
@@ -15,183 +15,128 @@ NC='\033[0m' # No Color
 # Configuration
 APP_DIR="/opt/currency-exchange"
 SERVICE_NAME="currency-exchange"
+BACKUP_DIR="$APP_DIR/backups"
 
 # Function to print colored output
 print_status() {
     echo -e "${GREEN}[INFO]${NC} $1"
+    logger -t "aws-deploy" "INFO: $1"
 }
 
 print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
+    logger -t "aws-deploy" "WARNING: $1"
 }
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+    logger -t "aws-deploy" "ERROR: $1"
 }
 
 print_header() {
     echo -e "${BLUE}[SETUP]${NC} $1"
+    logger -t "aws-deploy" "SETUP: $1"
 }
 
-# Check if this is initial setup or update
-if [ ! -d "$APP_DIR" ]; then
-    INITIAL_SETUP=true
-    print_header "🚀 Starting AWS EC2 initial setup..."
-else
-    INITIAL_SETUP=false
-    print_header "🔄 Starting deployment update..."
-fi
-
-# Check if running as ec2-user
-if [ "$USER" != "ec2-user" ]; then
-    print_error "This script should be run as ec2-user"
-    exit 1
-fi
-
-if [ "$INITIAL_SETUP" = true ]; then
-    # INITIAL SETUP
-    print_status "Updating system packages..."
-    sudo yum update -y
-
-    print_status "Installing dependencies..."
-    sudo yum install -y python3.11 python3.11-pip python3.11-devel git nginx postgresql15
-    sudo yum groupinstall -y "Development Tools"
+# Function to check system resources
+check_system_resources() {
+    print_status "Checking system resources..."
     
-    # Install additional packages for socket recovery
-    sudo yum install -y htop iotop lsof
-
-    # Create application directory
-    print_status "Creating application directory..."
-    sudo mkdir -p $APP_DIR
-    sudo chown ec2-user:ec2-user $APP_DIR
-
-    # Get repository URL
-    print_header "Repository Setup"
-    read -p "Enter your GitHub repository URL: " REPO_URL
-    if [ -z "$REPO_URL" ]; then
-        print_error "Repository URL is required"
+    # Check available disk space (require at least 2GB)
+    available_space=$(df / | awk 'NR==2 {print $4}')
+    required_space=2097152  # 2GB in KB
+    
+    if [ "$available_space" -lt "$required_space" ]; then
+        print_error "Insufficient disk space. Required: 2GB, Available: $(($available_space/1024/1024))GB"
         exit 1
     fi
-
-    # Clone repository
-    print_status "Cloning repository..."
-    cd $APP_DIR
-    git clone $REPO_URL .
-
-    # Create virtual environment
-    print_status "Creating Python virtual environment..."
-    python3.11 -m venv venv
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install -r requirements.txt
     
-    # Install additional Python packages for socket recovery
-    pip install psutil
-
-    # Database configuration
-    print_header "Database Configuration"
-    read -p "Enter your RDS endpoint: " RDS_ENDPOINT
-    read -p "Enter database username [currencyuser]: " DB_USER
-    DB_USER=${DB_USER:-currencyuser}
-    read -s -p "Enter database password: " DB_PASSWORD
-    echo
-    read -p "Enter database name [currency_exchange]: " DB_NAME
-    DB_NAME=${DB_NAME:-currency_exchange}
-
-    # Generate secure keys
-    print_status "Generating secure keys..."
-    SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    ADMIN_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
-
-    # Create production environment file (not committed to GitHub)
-    print_status "Creating production environment configuration..."
-    cat > .env.production << EOF
-FLASK_ENV=production
-DEBUG=false
-PORT=5001
-SECRET_KEY=$SECRET_KEY
-LOAD_SAMPLE_DATA=false
-DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$RDS_ENDPOINT:5432/$DB_NAME
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=$ADMIN_PASSWORD
-AWS_REGION=us-east-1
-EOF
-
-    print_status "Environment file created. Contents:"
-    cat .env.production
-
-    print_warning "Admin Credentials - SAVE THESE:"
-    print_warning "Username: admin"
-    print_warning "Password: $ADMIN_PASSWORD"
-
-    # Test database connection
-    print_status "Testing database connection..."
-    if psql -h $RDS_ENDPOINT -U $DB_USER -d $DB_NAME -c "SELECT 1;" > /dev/null 2>&1; then
-        print_status "✅ Database connection successful"
-    else
-        print_warning "⚠️  Database connection failed. Check RDS configuration."
+    # Check available memory (require at least 1GB)
+    available_memory=$(free -k | awk 'NR==2{print $7}')
+    required_memory=1048576  # 1GB in KB
+    
+    if [ "$available_memory" -lt "$required_memory" ]; then
+        print_warning "Low available memory. Available: $(($available_memory/1024))MB"
     fi
-
-    # Create log directories with enhanced structure and proper permissions
-    print_status "Setting up comprehensive logging directories..."
-    sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    sudo chown -R ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    sudo chmod -R 755 /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
     
-    # Create initial log files with proper permissions
-    sudo touch /var/log/currency-exchange/app.log
-    sudo touch /var/log/gunicorn/access.log
-    sudo touch /var/log/gunicorn/error.log
-    sudo chown ec2-user:ec2-user /var/log/currency-exchange/app.log
-    sudo chown ec2-user:ec2-user /var/log/gunicorn/access.log
-    sudo chown ec2-user:ec2-user /var/log/gunicorn/error.log
-    sudo chmod 644 /var/log/currency-exchange/app.log
-    sudo chmod 644 /var/log/gunicorn/access.log
-    sudo chmod 644 /var/log/gunicorn/error.log
-    
-    # Test logging setup
-    print_status "Testing logging setup..."
-    echo "$(date): Logging setup completed during deployment" | sudo tee -a /var/log/currency-exchange/app.log > /dev/null
-    echo "$(date): Gunicorn access log initialized" | sudo tee -a /var/log/gunicorn/access.log > /dev/null
-    echo "$(date): Gunicorn error log initialized" | sudo tee -a /var/log/gunicorn/error.log > /dev/null
-    
-    print_status "✅ Logging directories and files created successfully!"
-    print_status "Log files:"
-    print_status "  - Application logs: /var/log/currency-exchange/app.log"
-    print_status "  - Gunicorn access logs: /var/log/gunicorn/access.log"
-    print_status "  - Gunicorn error logs: /var/log/gunicorn/error.log"
-    
-    # Set up log rotation to prevent disk space issues
-    sudo tee /etc/logrotate.d/currency-exchange > /dev/null << 'EOF'
-/var/log/currency-exchange/*.log {
-    daily
-    missingok
-    rotate 7
-    compress
-    delaycompress
-    notifempty
-    create 644 ec2-user ec2-user
-    postrotate
-        systemctl reload currency-exchange || true
-    endscript
+    print_status "✅ System resources check passed"
 }
 
-/var/log/gunicorn/*.log {
-    daily
-    missingok
-    rotate 7
-    compress
-    delaycompress
-    notifempty
-    create 644 ec2-user ec2-user
-    postrotate
-        systemctl reload currency-exchange || true
-    endscript
+# Function to detect Python version
+detect_python_version() {
+    print_status "Detecting available Python version..."
+    
+    # Try different Python versions in order of preference
+    for version in python3.11 python3.10 python3.9 python3; do
+        if command -v $version >/dev/null 2>&1; then
+            PYTHON_CMD=$version
+            PYTHON_VERSION=$($version --version 2>&1 | cut -d' ' -f2)
+            print_status "Using Python: $PYTHON_CMD (version $PYTHON_VERSION)"
+            return 0
+        fi
+    done
+    
+    print_error "No suitable Python version found"
+    exit 1
 }
-EOF
 
-    # Create enhanced systemd service with socket error recovery
+# Function to secure password input
+secure_password_input() {
+    local prompt="$1"
+    local password=""
+    local confirm=""
+    
+    while true; do
+        echo -n "$prompt: "
+        read -s password
+        echo
+        
+        if [ ${#password} -lt 8 ]; then
+            print_error "Password must be at least 8 characters long"
+            continue
+        fi
+        
+        echo -n "Confirm password: "
+        read -s confirm
+        echo
+        
+        if [ "$password" = "$confirm" ]; then
+            echo "$password"
+            return 0
+        else
+            print_error "Passwords do not match. Please try again."
+        fi
+    done
+}
+
+# Function to create backup
+create_backup() {
+    if [ -d "$APP_DIR" ] && [ "$INITIAL_SETUP" != true ]; then
+        print_status "Creating backup..."
+        local backup_name="backup_$(date +%Y%m%d_%H%M%S)"
+        mkdir -p "$BACKUP_DIR"
+        
+        # Backup application files (excluding venv and logs)
+        tar -czf "$BACKUP_DIR/$backup_name.tar.gz" \
+            --exclude="venv" \
+            --exclude="*.log" \
+            --exclude="backups" \
+            -C "$APP_DIR" . 2>/dev/null || {
+            print_warning "Backup creation failed, continuing..."
+        }
+        
+        # Keep only last 5 backups
+        cd "$BACKUP_DIR"
+        ls -t *.tar.gz 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+        
+        print_status "✅ Backup created: $backup_name.tar.gz"
+    fi
+}
+
+# Function to create systemd service
+create_systemd_service() {
     print_status "Creating systemd service..."
+    
     sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
 [Unit]
 Description=Currency Exchange Flask App
@@ -219,7 +164,7 @@ StartLimitBurst=5
 StandardOutput=journal
 StandardError=journal
 
-# Enhanced resource limits to prevent socket issues
+# Enhanced resource limits
 LimitNOFILE=65536
 LimitNPROC=4096
 
@@ -230,58 +175,17 @@ CPUQuota=200%
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    # Create socket recovery service
-    print_status "Creating socket recovery service..."
-    sudo tee /etc/systemd/system/currency-exchange-recovery.service > /dev/null << EOF
-[Unit]
-Description=Currency Exchange Socket Recovery Service
-After=currency-exchange.service
-Requires=currency-exchange.service
-
-[Service]
-Type=simple
-User=ec2-user
-Group=ec2-user
-WorkingDirectory=$APP_DIR
-Environment=PATH=$APP_DIR/venv/bin
-ExecStart=$APP_DIR/venv/bin/python $APP_DIR/socket_recovery.py --daemon
-Restart=always
-RestartSec=30
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # Create socket recovery timer for regular checks
-    sudo tee /etc/systemd/system/currency-exchange-recovery.timer > /dev/null << EOF
-[Unit]
-Description=Currency Exchange Socket Recovery Timer
-Requires=currency-exchange-recovery.service
-
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=2min
-Unit=currency-exchange-recovery.service
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    # Domain configuration
-    print_header "Domain Configuration"
-    read -p "Enter your domain name (or press Enter to skip): " DOMAIN_NAME
-
-    # Create Nginx configuration with improved settings
-    print_status "Creating Nginx configuration..."
-    if [ -n "$DOMAIN_NAME" ]; then
-        sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << EOF
-server {
-    listen 80;
-    server_name $DOMAIN_NAME www.$DOMAIN_NAME;
     
+    print_status "✅ Systemd service created"
+}
+
+# Function to create Nginx configuration
+create_nginx_config() {
+    local domain_name="$1"
+    print_status "Creating Nginx configuration..."
+    
+    # Common configuration block
+    local common_config='
     # Security headers
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
@@ -301,12 +205,12 @@ server {
     location / {
         proxy_pass http://127.0.0.1:5001;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         
         # Handle client disconnections gracefully
         proxy_ignore_client_abort on;
@@ -316,7 +220,14 @@ server {
     location /health {
         access_log off;
         proxy_pass http://127.0.0.1:5001/health;
-    }
+    }'
+    
+    if [ -n "$domain_name" ]; then
+        sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << EOF
+server {
+    listen 80;
+    server_name $domain_name www.$domain_name;
+    $common_config
 }
 EOF
     else
@@ -324,147 +235,272 @@ EOF
 server {
     listen 80 default_server;
     server_name _;
-    
-    # Security headers
-    add_header X-Frame-Options DENY;
-    add_header X-Content-Type-Options nosniff;
-    add_header X-XSS-Protection "1; mode=block";
-    
-    # Timeouts to prevent socket errors
-    proxy_connect_timeout 60s;
-    proxy_send_timeout 60s;
-    proxy_read_timeout 60s;
-    
-    # Buffer settings
-    proxy_buffering on;
-    proxy_buffer_size 128k;
-    proxy_buffers 4 256k;
-    proxy_busy_buffers_size 256k;
-
-    location / {
-        proxy_pass http://127.0.0.1:5001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # Handle client disconnections gracefully
-        proxy_ignore_client_abort on;
-    }
-    
-    # Health check endpoint
-    location /health {
-        access_log off;
-        proxy_pass http://127.0.0.1:5001/health;
-    }
+    $common_config
 }
 EOF
     fi
-
+    
     # Remove default Nginx config
     sudo rm -f /etc/nginx/conf.d/default.conf
-
+    
     # Test Nginx configuration
     print_status "Testing Nginx configuration..."
     sudo nginx -t
+    
+    print_status "✅ Nginx configuration created"
+}
 
-    # Enable services including recovery mechanisms
+# Function to test database connection securely
+test_database_connection() {
+    local rds_endpoint="$1"
+    local db_user="$2"
+    local db_password="$3"
+    local db_name="$4"
+    
+    print_status "Testing database connection..."
+    
+    # Use PGPASSWORD environment variable for secure password passing
+    if PGPASSWORD="$db_password" psql -h "$rds_endpoint" -U "$db_user" -d "$db_name" -c "SELECT 1;" > /dev/null 2>&1; then
+        print_status "✅ Database connection successful"
+        return 0
+    else
+        print_warning "⚠️  Database connection failed. Check RDS configuration."
+        return 1
+    fi
+}
+
+# Function to handle git operations with error checking
+git_operation() {
+    local operation="$1"
+    local repo_url="$2"
+    
+    case "$operation" in
+        "clone")
+            print_status "Cloning repository..."
+            if ! git clone "$repo_url" .; then
+                print_error "Failed to clone repository. Check URL and permissions."
+                exit 1
+            fi
+            ;;
+        "pull")
+            print_status "Pulling latest changes..."
+            if ! git pull origin main; then
+                print_error "Failed to pull changes. Check for conflicts or permissions."
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+# Function to gracefully restart services
+graceful_service_restart() {
+    local service="$1"
+    
+    print_status "Gracefully restarting $service..."
+    
+    if sudo systemctl is-active --quiet "$service"; then
+        # Service is running, perform graceful restart
+        sudo systemctl reload-or-restart "$service"
+        
+        # Wait for service to be ready
+        local max_attempts=30
+        local attempt=0
+        
+        while [ $attempt -lt $max_attempts ]; do
+            if sudo systemctl is-active --quiet "$service"; then
+                print_status "✅ $service restarted successfully"
+                return 0
+            fi
+            sleep 2
+            attempt=$((attempt + 1))
+        done
+        
+        print_error "❌ $service failed to restart within timeout"
+        return 1
+    else
+        # Service not running, start it
+        sudo systemctl start "$service"
+        if sudo systemctl is-active --quiet "$service"; then
+            print_status "✅ $service started successfully"
+            return 0
+        else
+            print_error "❌ $service failed to start"
+            return 1
+        fi
+    fi
+}
+
+# Function to verify deployment
+verify_deployment() {
+    print_status "Verifying deployment..."
+    
+    # Check service status
+    if ! sudo systemctl is-active --quiet $SERVICE_NAME; then
+        print_error "❌ Service is not running"
+        sudo systemctl status $SERVICE_NAME
+        return 1
+    fi
+    
+    # Check if application responds
+    local max_attempts=10
+    local attempt=0
+    
+    while [ $attempt -lt $max_attempts ]; do
+        if curl -s http://localhost:5001/health > /dev/null 2>&1; then
+            print_status "✅ Application is responding"
+            return 0
+        fi
+        sleep 3
+        attempt=$((attempt + 1))
+    done
+    
+    print_warning "⚠️  Application health check failed"
+    return 1
+}
+
+# Main execution starts here
+
+# Check if this is initial setup or update
+if [ ! -d "$APP_DIR" ]; then
+    INITIAL_SETUP=true
+    print_header "🚀 Starting AWS EC2 initial setup..."
+else
+    INITIAL_SETUP=false
+    print_header "🔄 Starting deployment update..."
+fi
+
+# Check if running as ec2-user
+if [ "$USER" != "ec2-user" ]; then
+    print_error "This script should be run as ec2-user"
+    exit 1
+fi
+
+# Check system resources
+check_system_resources
+
+# Create backup before update
+create_backup
+
+if [ "$INITIAL_SETUP" = true ]; then
+    # INITIAL SETUP
+    print_status "Updating system packages..."
+    sudo yum update -y
+
+    # Detect Python version
+    detect_python_version
+    
+    print_status "Installing dependencies..."
+    # Install Python packages based on detected version
+    if [[ "$PYTHON_VERSION" == "3.11"* ]]; then
+        sudo yum install -y python3.11 python3.11-pip python3.11-devel git nginx postgresql15
+    elif [[ "$PYTHON_VERSION" == "3.10"* ]]; then
+        sudo yum install -y python3.10 python3.10-pip python3.10-devel git nginx postgresql15
+    else
+        sudo yum install -y python3 python3-pip python3-devel git nginx postgresql15
+    fi
+    
+    sudo yum groupinstall -y "Development Tools"
+    
+    # Install additional system monitoring packages
+    sudo yum install -y htop iotop lsof
+
+    # Create application directory
+    print_status "Creating application directory..."
+    sudo mkdir -p $APP_DIR
+    sudo chown ec2-user:ec2-user $APP_DIR
+
+    # Get repository URL
+    print_header "Repository Setup"
+    read -p "Enter your GitHub repository URL: " REPO_URL
+    if [ -z "$REPO_URL" ]; then
+        print_error "Repository URL is required"
+        exit 1
+    fi
+
+    # Clone repository
+    cd $APP_DIR
+    git_operation "clone" "$REPO_URL"
+
+    # Create virtual environment
+    print_status "Creating Python virtual environment..."
+    $PYTHON_CMD -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
+
+    # Database configuration
+    print_header "Database Configuration"
+    read -p "Enter your RDS endpoint: " RDS_ENDPOINT
+    read -p "Enter database username [currencyuser]: " DB_USER
+    DB_USER=${DB_USER:-currencyuser}
+    
+    # Secure password input
+    DB_PASSWORD=$(secure_password_input "Enter database password")
+    
+    read -p "Enter database name [currency_exchange]: " DB_NAME
+    DB_NAME=${DB_NAME:-currency_exchange}
+
+    # Generate secure keys
+    print_status "Generating secure keys..."
+    SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+    ADMIN_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
+
+    # Create production environment file with secure permissions
+    print_status "Creating production environment configuration..."
+    cat > .env.production << EOF
+FLASK_ENV=production
+DEBUG=false
+PORT=5001
+SECRET_KEY=$SECRET_KEY
+LOAD_SAMPLE_DATA=false
+DATABASE_URL=postgresql://$DB_USER:$DB_PASSWORD@$RDS_ENDPOINT:5432/$DB_NAME
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+AWS_REGION=us-east-1
+EOF
+
+    # Set secure permissions on environment file
+    chmod 600 .env.production
+
+    print_status "Environment file created with secure permissions"
+
+    # Display admin credentials securely (masked)
+    print_warning "Admin Credentials - SAVE THESE:"
+    print_warning "Username: admin"
+    print_warning "Password: ${ADMIN_PASSWORD:0:4}****${ADMIN_PASSWORD: -4}"
+    print_warning "Full password saved to .env.production (secure access only)"
+
+    # Test database connection
+    test_database_connection "$RDS_ENDPOINT" "$DB_USER" "$DB_PASSWORD" "$DB_NAME"
+
+    # Create services
+    create_systemd_service
+
+    # Domain configuration
+    print_header "Domain Configuration"
+    read -p "Enter your domain name (or press Enter to skip): " DOMAIN_NAME
+
+    # Create Nginx configuration
+    create_nginx_config "$DOMAIN_NAME"
+
+    # Enable services
     print_status "Enabling services..."
     sudo systemctl daemon-reload
     sudo systemctl enable $SERVICE_NAME
-    sudo systemctl enable currency-exchange-recovery
-    sudo systemctl enable currency-exchange-recovery.timer
     sudo systemctl enable nginx
-    
-    # Make scripts executable
-    chmod +x $APP_DIR/monitor.sh
-    chmod +x $APP_DIR/socket_recovery.py
 
 else
     # UPDATE DEPLOYMENT
     cd $APP_DIR
-    print_status "Pulling latest changes..."
-    git pull origin main
+    
+    # Pull latest changes
+    git_operation "pull"
 
     print_status "Activating virtual environment..."
     source venv/bin/activate
 
     print_status "Updating dependencies..."
     pip install -r requirements.txt
-    
-    # Ensure log directories exist during updates with proper permissions
-    print_status "Verifying and updating log directories..."
-    sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    sudo chown -R ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    sudo chmod -R 755 /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    
-    # Create log files if they don't exist with proper permissions
-    sudo touch /var/log/currency-exchange/app.log
-    sudo touch /var/log/gunicorn/access.log
-    sudo touch /var/log/gunicorn/error.log
-    sudo chown ec2-user:ec2-user /var/log/currency-exchange/app.log
-    sudo chown ec2-user:ec2-user /var/log/gunicorn/access.log
-    sudo chown ec2-user:ec2-user /var/log/gunicorn/error.log
-    sudo chmod 644 /var/log/currency-exchange/app.log
-    sudo chmod 644 /var/log/gunicorn/access.log
-    sudo chmod 644 /var/log/gunicorn/error.log
-    
-    # Log the update
-    echo "$(date): Application updated via deployment script" | sudo tee -a /var/log/currency-exchange/app.log > /dev/null
-    print_status "✅ Logging directories verified and updated"
-    
-    # Ensure recovery services are created/updated during updates too
-    print_status "Creating/updating socket recovery services..."
-    
-    # Create socket recovery service
-    sudo tee /etc/systemd/system/currency-exchange-recovery.service > /dev/null << EOF
-[Unit]
-Description=Currency Exchange Socket Recovery Service
-After=currency-exchange.service
-Requires=currency-exchange.service
-
-[Service]
-Type=simple
-User=ec2-user
-Group=ec2-user
-WorkingDirectory=$APP_DIR
-Environment=PATH=$APP_DIR/venv/bin
-ExecStart=$APP_DIR/venv/bin/python $APP_DIR/socket_recovery.py --daemon
-Restart=always
-RestartSec=30
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    # Create socket recovery timer for regular checks
-    sudo tee /etc/systemd/system/currency-exchange-recovery.timer > /dev/null << EOF
-[Unit]
-Description=Currency Exchange Socket Recovery Timer
-Requires=currency-exchange-recovery.service
-
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=2min
-Unit=currency-exchange-recovery.service
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    # Enable recovery services
-    sudo systemctl daemon-reload
-    sudo systemctl enable currency-exchange-recovery
-    sudo systemctl enable currency-exchange-recovery.timer
-    
-    # Make scripts executable
-    chmod +x $APP_DIR/monitor.sh
-    chmod +x $APP_DIR/socket_recovery.py
 fi
 
 # Common steps for both setup and update
@@ -472,11 +508,18 @@ print_status "Running database migrations..."
 cd $APP_DIR
 source venv/bin/activate
 
-# Load environment variables for migrations
+# Load environment variables securely
 print_status "Loading environment variables..."
-export $(cat .env.production | grep -v '^#' | xargs)
+if [ -f ".env.production" ]; then
+    set -a
+    source .env.production
+    set +a
+else
+    print_error "Environment file not found"
+    exit 1
+fi
 
-# Run migrations with environment loaded
+# Run migrations
 print_status "Executing migrations..."
 python migrations.py
 
@@ -503,44 +546,21 @@ with app.app_context():
         print('Tables may not be fully initialized yet')
 "
 
+# Start/restart services gracefully
 print_status "Starting/restarting services..."
-sudo systemctl start $SERVICE_NAME
-sudo systemctl start currency-exchange-recovery
-sudo systemctl start currency-exchange-recovery.timer
-sudo systemctl start nginx
+graceful_service_restart $SERVICE_NAME
+graceful_service_restart nginx
 
-# Check service status
-print_status "Checking service status..."
-if sudo systemctl is-active --quiet $SERVICE_NAME; then
-    print_status "✅ Currency Exchange service is running"
-else
-    print_error "❌ Service failed to start"
-    sudo systemctl status $SERVICE_NAME
-    exit 1
-fi
-
-if sudo systemctl is-active --quiet nginx; then
-    print_status "✅ Nginx is running"
-else
-    print_error "❌ Nginx failed to start"
-    sudo systemctl status nginx
-    exit 1
-fi
-
-# Check recovery service status
-if sudo systemctl is-active --quiet currency-exchange-recovery; then
-    print_status "✅ Socket recovery service is running"
-else
-    print_warning "⚠️  Socket recovery service not running (this is optional)"
-fi
+# Verify deployment
+verify_deployment
 
 if [ "$INITIAL_SETUP" = true ]; then
     # Create backup directory
     print_status "Creating backup directory..."
-    mkdir -p $APP_DIR/backups
+    mkdir -p $BACKUP_DIR
 
     # Get public IP
-    PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+    PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo "Unable to retrieve")
 
     print_header "🎉 Initial setup completed successfully!"
     echo
@@ -557,38 +577,20 @@ if [ "$INITIAL_SETUP" = true ]; then
         print_status "2. Setup SSL: sudo certbot --nginx -d $DOMAIN_NAME"
     fi
     print_status "3. To deploy updates: ./aws-deploy.sh"
+    print_status "4. Admin credentials are in .env.production (secure access)"
+    print_status "5. View logs: sudo journalctl -u $SERVICE_NAME -f"
 else
     print_header "🎉 Update deployment completed successfully!"
 fi
 
-print_status "Verifying logging setup..."
-# Check if log files exist and are writable
-if [ -f "/var/log/currency-exchange/app.log" ] && [ -w "/var/log/currency-exchange/app.log" ]; then
-    print_status "✅ Application log file is accessible"
-else
-    print_warning "⚠️  Application log file may have permission issues"
-fi
-
-if [ -f "/var/log/gunicorn/access.log" ] && [ -w "/var/log/gunicorn/access.log" ]; then
-    print_status "✅ Gunicorn access log is accessible"
-else
-    print_warning "⚠️  Gunicorn access log may have permission issues"
-fi
-
-if [ -f "/var/log/gunicorn/error.log" ] && [ -w "/var/log/gunicorn/error.log" ]; then
-    print_status "✅ Gunicorn error log is accessible"
-else
-    print_warning "⚠️  Gunicorn error log may have permission issues"
-fi
+# Final status and logging information
+print_status "Deployment logging information:"
+print_status "  - Deployment logs: sudo journalctl -t aws-deploy"
+print_status "  - Application logs: sudo journalctl -u $SERVICE_NAME"
+print_status "  - Nginx logs: sudo journalctl -u nginx"
+print_status "  - System logs: sudo journalctl -f"
 
 print_status "Recent application logs:"
-sudo tail -n 5 /var/log/currency-exchange/app.log 2>/dev/null || echo "No application logs yet"
+sudo journalctl -u $SERVICE_NAME --no-pager -n 5 2>/dev/null || echo "No application logs yet"
 
-print_status "Recent systemd logs:"
-sudo journalctl -u $SERVICE_NAME --no-pager -n 5
-
-print_status "Log file locations:"
-print_status "  - Application: /var/log/currency-exchange/app.log"
-print_status "  - Gunicorn Access: /var/log/gunicorn/access.log"
-print_status "  - Gunicorn Error: /var/log/gunicorn/error.log"
-print_status "  - Systemd Journal: sudo journalctl -u $SERVICE_NAME"
+print_status "🎉 Deployment script completed successfully!"

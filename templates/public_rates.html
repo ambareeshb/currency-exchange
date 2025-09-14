@@ -70,12 +70,33 @@
                     <small class="text-muted d-block mt-2">1 AED equals</small>
                 </h2>
                 <div class="row" id="fromAedContainer">
-                    <!-- Cards will be loaded here by JavaScript -->
-                </div>
-                <div class="text-center mt-3">
-                    <button id="loadMoreFromAed" class="btn btn-outline-primary" style="display: none;">
-                        <i class="fas fa-plus me-2"></i>Load More
-                    </button>
+                    {% for currency in currencies %}
+                    <div class="col-md-6 col-lg-3 mb-4">
+                        <div class="card rate-card border-primary h-100">
+                            <div class="card-body text-center">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title text-primary mb-0">{{ currency.symbol }}</h5>
+                                    <button type="button" class="btn btn-sm btn-outline-info"
+                                            onclick="showCurrencyInfo({{ currency.id }})"
+                                            title="View currency information">
+                                        <i class="fas fa-info"></i>
+                                    </button>
+                                </div>
+                                <h6 class="card-subtitle mb-3 text-muted">{{ currency.name }}</h6>
+                                <div class="display-6 currency-rate text-primary mb-2">
+                                    {{ currency.buying_rate_display if currency.has_exchange_rates else "1.000000 -" }}
+                                </div>
+                                <small class="text-muted">
+                                    {% if currency.has_exchange_rates %}
+                                        Exchange buys: {{ currency.buying_rate_display }} {{ currency.symbol }}<br><span class="badge bg-success">Live Rate</span>
+                                    {% else %}
+                                        1 AED = {{ currency.buying_rate_display }} {{ currency.symbol }}<br><span class="badge bg-secondary">Reference</span>
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -88,12 +109,33 @@
                     <small class="text-muted d-block mt-2">1 unit equals</small>
                 </h2>
                 <div class="row" id="toAedContainer">
-                    <!-- Cards will be loaded here by JavaScript -->
-                </div>
-                <div class="text-center mt-3">
-                    <button id="loadMoreToAed" class="btn btn-outline-success" style="display: none;">
-                        <i class="fas fa-plus me-2"></i>Load More
-                    </button>
+                    {% for currency in currencies %}
+                    <div class="col-md-6 col-lg-3 mb-4">
+                        <div class="card rate-card border-success h-100">
+                            <div class="card-body text-center">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title text-success mb-0">{{ currency.symbol }}</h5>
+                                    <button type="button" class="btn btn-sm btn-outline-info"
+                                            onclick="showCurrencyInfo({{ currency.id }})"
+                                            title="View currency information">
+                                        <i class="fas fa-info"></i>
+                                    </button>
+                                </div>
+                                <h6 class="card-subtitle mb-3 text-muted">{{ currency.name }}</h6>
+                                <div class="display-6 currency-rate text-success mb-2">
+                                    {{ currency.selling_from_aed_display if currency.has_exchange_rates else "No rate" }}
+                                </div>
+                                <small class="text-muted">
+                                    {% if currency.has_exchange_rates %}
+                                        Exchange sells: {{ currency.selling_from_aed_display }} AED<br><span class="badge bg-danger">Live Rate</span>
+                                    {% else %}
+                                        1 {{ currency.symbol }} = {{ currency.selling_from_aed_display }} AED<br><span class="badge bg-secondary">Reference</span>
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -232,422 +274,7 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
-    <script type="application/json" id="currencies-data">{{ currencies|tojson|safe }}</script>
     <script>
-        // Currency data from server (make it mutable for real-time updates)
-        let currencies = JSON.parse(document.getElementById('currencies-data').textContent);
-        
-        // Initialize Socket.IO connection with enhanced configuration
-        const socket = io({
-            transports: ['polling', 'websocket'],  // Start with polling, upgrade to websocket
-            upgrade: true,
-            rememberUpgrade: false,
-            timeout: 20000,
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 1000,
-            reconnectionDelayMax: 5000,
-            maxReconnectionAttempts: 5,
-            forceNew: false,
-            autoConnect: true,
-            // Additional error handling
-            pingTimeout: 30000,
-            pingInterval: 10000
-        });
-        
-        // Connection status indicator
-        let connectionStatus = document.createElement('div');
-        connectionStatus.id = 'connectionStatus';
-        connectionStatus.style.cssText = `
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 12px;
-            z-index: 1000;
-            display: none;
-        `;
-        document.body.appendChild(connectionStatus);
-        
-        // Enhanced Socket event handlers with better error handling
-        socket.on('connect', function() {
-            console.log('Connected to server');
-            showConnectionStatus('Connected', 'success');
-        });
-        
-        socket.on('disconnect', function(reason) {
-            console.log('Disconnected from server:', reason);
-            showConnectionStatus('Disconnected: ' + reason, 'warning');
-        });
-        
-        socket.on('connect_error', function(error) {
-            console.error('Connection error:', error);
-            showConnectionStatus('Connection Error', 'danger');
-        });
-        
-        socket.on('reconnect', function(attemptNumber) {
-            console.log('Reconnected after', attemptNumber, 'attempts');
-            showConnectionStatus('Reconnected', 'success');
-        });
-        
-        socket.on('reconnect_attempt', function(attemptNumber) {
-            console.log('Reconnection attempt:', attemptNumber);
-            showConnectionStatus('Reconnecting...', 'info');
-        });
-        
-        socket.on('reconnect_error', function(error) {
-            console.error('Reconnection error:', error);
-            showConnectionStatus('Reconnection Failed', 'danger');
-        });
-        
-        socket.on('reconnect_failed', function() {
-            console.error('Reconnection failed');
-            showConnectionStatus('Connection Lost', 'danger');
-        });
-        
-        socket.on('currency_added', function(data) {
-            console.log('Currency added:', data);
-            addCurrencyToPage(data);
-            showNotification(`New currency added: ${data.symbol}`, 'success');
-        });
-        
-        socket.on('currency_updated', function(data) {
-            console.log('Currency updated:', data);
-            updateCurrencyOnPage(data);
-            showNotification(`Currency updated: ${data.symbol}`, 'info');
-        });
-        
-        socket.on('currency_deleted', function(data) {
-            console.log('Currency deleted:', data);
-            removeCurrencyFromPage(data);
-            showNotification(`Currency removed: ${data.symbol}`, 'warning');
-        });
-        
-        function showConnectionStatus(message, type) {
-            connectionStatus.textContent = message;
-            connectionStatus.className = `alert alert-${type}`;
-            connectionStatus.style.display = 'block';
-            setTimeout(() => {
-                connectionStatus.style.display = 'none';
-            }, 3000);
-        }
-        
-        function showNotification(message, type) {
-            // Create notification element
-            const notification = document.createElement('div');
-            notification.className = `alert alert-${type} alert-dismissible fade show`;
-            notification.style.cssText = `
-                position: fixed;
-                top: 70px;
-                right: 10px;
-                z-index: 1000;
-                min-width: 300px;
-            `;
-            notification.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.remove();
-                }
-            }, 5000);
-        }
-        
-        function addCurrencyToPage(currency) {
-            // Add to currencies array
-            currencies.push(currency);
-            
-            // Add to table
-            const tableBody = document.querySelector('table tbody');
-            if (tableBody) {
-                const row = document.createElement('tr');
-                row.setAttribute('data-currency-id', currency.id);
-                row.innerHTML = `
-                    <td><strong>${currency.name}</strong></td>
-                    <td><span class="badge bg-secondary">${currency.symbol}</span></td>
-                    <td class="currency-rate">
-                        ${currency.has_exchange_rates ? currency.buying_rate_display : 'No rate set'}
-                    </td>
-                    <td class="currency-rate">
-                        ${currency.has_exchange_rates ? currency.selling_from_aed_display : 'No rate set'}
-                    </td>
-                    <td class="currency-rate">
-                        ${currency.has_exchange_rates ? 'See range above' : 'No rate set'}
-                    </td>
-                    <td class="currency-rate">
-                        ${currency.has_exchange_rates ? 'See range above' : 'No rate set'}
-                    </td>
-                `;
-                tableBody.appendChild(row);
-            }
-            
-            // Add cards to both sections
-            addCurrencyCard('fromAedContainer', currency, 'primary');
-            addCurrencyCard('toAedContainer', currency, 'success');
-        }
-        
-        function updateCurrencyOnPage(currency) {
-            // Update in currencies array
-            const index = currencies.findIndex(c => c.id === currency.id);
-            if (index !== -1) {
-                currencies[index] = currency;
-            }
-            
-            // Update table row
-            const tableRow = document.querySelector(`tr[data-currency-id="${currency.id}"]`);
-            if (tableRow) {
-                const cells = tableRow.querySelectorAll('td');
-                cells[0].innerHTML = `<strong>${currency.name}</strong>`;
-                cells[2].textContent = currency.has_exchange_rates ? currency.buying_rate_display : 'No rate set';
-                cells[3].textContent = currency.has_exchange_rates ? currency.selling_from_aed_display : 'No rate set';
-                cells[4].textContent = currency.has_exchange_rates ? 'See range above' : 'No rate set';
-                cells[5].textContent = currency.has_exchange_rates ? 'See range above' : 'No rate set';
-                
-                // Add update animation
-                tableRow.style.backgroundColor = '#fff3cd';
-                setTimeout(() => {
-                    tableRow.style.backgroundColor = '';
-                }, 2000);
-            }
-            
-            // Update cards
-            updateCurrencyCard('fromAedContainer', currency, 'primary');
-            updateCurrencyCard('toAedContainer', currency, 'success');
-        }
-        
-        function removeCurrencyFromPage(currency) {
-            // Remove from currencies array
-            const index = currencies.findIndex(c => c.id === currency.id);
-            if (index !== -1) {
-                currencies.splice(index, 1);
-            }
-            
-            // Remove table row
-            const tableRow = document.querySelector(`tr[data-currency-id="${currency.id}"]`);
-            if (tableRow) {
-                tableRow.style.backgroundColor = '#f8d7da';
-                setTimeout(() => {
-                    tableRow.remove();
-                }, 1000);
-            }
-            
-            // Remove cards
-            removeCurrencyCard('fromAedContainer', currency.id);
-            removeCurrencyCard('toAedContainer', currency.id);
-        }
-        
-        function addCurrencyCard(containerId, currency, borderClass) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-            
-            const isFromAed = containerId === 'fromAedContainer';
-            const rate = isFromAed ?
-                (currency.has_exchange_rates ? currency.buying_rate_display : 'No rate') :
-                (currency.has_exchange_rates ? currency.selling_from_aed_display : 'No rate');
-            const rateText = isFromAed ?
-                `1 AED = ${rate} ${currency.symbol}` :
-                `1 ${currency.symbol} = ${rate} AED`;
-            
-            const cardHtml = `
-                <div class="col-md-6 col-lg-3 mb-4 currency-card" data-currency-id="${currency.id}">
-                    <div class="card rate-card border-${borderClass} h-100">
-                        <div class="card-body text-center">
-                            <h5 class="card-title text-${borderClass}">${currency.symbol}</h5>
-                            <h6 class="card-subtitle mb-3 text-muted">${currency.name}</h6>
-                            <div class="display-6 currency-rate text-${borderClass} mb-2">
-                                ${rate}
-                            </div>
-                            <small class="text-muted">${rateText}</small>
-                        </div>
-                    </div>
-                </div>
-            `;
-            container.insertAdjacentHTML('beforeend', cardHtml);
-        }
-        
-        function updateCurrencyCard(containerId, currency, borderClass) {
-            const card = document.querySelector(`#${containerId} .currency-card[data-currency-id="${currency.id}"]`);
-            if (!card) return;
-            
-            const isFromAed = containerId === 'fromAedContainer';
-            const rate = isFromAed ?
-                (currency.has_exchange_rates ? currency.buying_rate_display : 'No rate') :
-                (currency.has_exchange_rates ? currency.selling_from_aed_display : 'No rate');
-            const rateText = isFromAed ?
-                `1 AED = ${rate} ${currency.symbol}` :
-                `1 ${currency.symbol} = ${rate} AED`;
-            
-            const nameElement = card.querySelector('.card-subtitle');
-            const rateElement = card.querySelector('.display-6');
-            const textElement = card.querySelector('small');
-            
-            if (nameElement) nameElement.textContent = currency.name;
-            if (rateElement) rateElement.textContent = rate;
-            if (textElement) textElement.textContent = rateText;
-            
-            // Add update animation
-            card.style.backgroundColor = '#fff3cd';
-            setTimeout(() => {
-                card.style.backgroundColor = '';
-            }, 2000);
-        }
-        
-        function removeCurrencyCard(containerId, currencyId) {
-            const card = document.querySelector(`#${containerId} .currency-card[data-currency-id="${currencyId}"]`);
-            if (card) {
-                card.style.backgroundColor = '#f8d7da';
-                setTimeout(() => {
-                    card.remove();
-                }, 1000);
-            }
-        }
-        
-        // Infinite scroll configuration
-        const ITEMS_PER_PAGE = 4;
-        let fromAedCurrentPage = 0;
-        let toAedCurrentPage = 0;
-        
-        // Load initial cards
-        document.addEventListener('DOMContentLoaded', function() {
-            loadFromAedCards();
-            loadToAedCards();
-            
-            // Set up infinite scroll
-            window.addEventListener('scroll', handleScroll);
-        });
-        
-        function loadFromAedCards() {
-            const container = document.getElementById('fromAedContainer');
-            const loadMoreBtn = document.getElementById('loadMoreFromAed');
-            
-            const startIndex = fromAedCurrentPage * ITEMS_PER_PAGE;
-            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, currencies.length);
-            
-            for (let i = startIndex; i < endIndex; i++) {
-                const currency = currencies[i];
-                const rate = currency.has_exchange_rates ? currency.buying_rate_display : 'No rate';
-                const rateDisplay = currency.has_exchange_rates ?
-                    currency.buying_rate_display :
-                    rate;
-                const cardHtml = `
-                    <div class="col-md-6 col-lg-3 mb-4 currency-card" data-currency-id="${currency.id}" data-aos="fade-up">
-                        <div class="card rate-card border-primary h-100">
-                            <div class="card-body text-center">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h5 class="card-title text-primary mb-0">${currency.symbol}</h5>
-                                    <button type="button" class="btn btn-sm btn-outline-info"
-                                            onclick="showCurrencyInfo(${currency.id})"
-                                            title="View currency information">
-                                        <i class="fas fa-info"></i>
-                                    </button>
-                                </div>
-                                <h6 class="card-subtitle mb-3 text-muted">${currency.name}</h6>
-                                <div class="display-6 currency-rate text-primary mb-2">
-                                    ${rateDisplay}
-                                </div>
-                                <small class="text-muted">
-                                    ${currency.has_exchange_rates ?
-                                        `Exchange buys: ${rateDisplay} ${currency.symbol}<br><span class="badge bg-success">Live Rate</span>` :
-                                        `1 AED = ${rateDisplay} ${currency.symbol}<br><span class="badge bg-secondary">Reference</span>`
-                                    }
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', cardHtml);
-            }
-            
-            fromAedCurrentPage++;
-            
-            // Show/hide load more button
-            if (endIndex >= currencies.length) {
-                loadMoreBtn.style.display = 'none';
-            } else {
-                loadMoreBtn.style.display = 'inline-block';
-            }
-        }
-        
-        function loadToAedCards() {
-            const container = document.getElementById('toAedContainer');
-            const loadMoreBtn = document.getElementById('loadMoreToAed');
-            
-            const startIndex = toAedCurrentPage * ITEMS_PER_PAGE;
-            const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, currencies.length);
-            
-            for (let i = startIndex; i < endIndex; i++) {
-                const currency = currencies[i];
-                const toAedRate = currency.has_exchange_rates ? currency.selling_from_aed_display : 'No rate';
-                const toAedRateDisplay = currency.has_exchange_rates ?
-                    currency.selling_from_aed_display :
-                    toAedRate;
-                const cardHtml = `
-                    <div class="col-md-6 col-lg-3 mb-4 currency-card" data-currency-id="${currency.id}" data-aos="fade-up">
-                        <div class="card rate-card border-success h-100">
-                            <div class="card-body text-center">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h5 class="card-title text-success mb-0">${currency.symbol}</h5>
-                                    <button type="button" class="btn btn-sm btn-outline-info"
-                                            onclick="showCurrencyInfo(${currency.id})"
-                                            title="View currency information">
-                                        <i class="fas fa-info"></i>
-                                    </button>
-                                </div>
-                                <h6 class="card-subtitle mb-3 text-muted">${currency.name}</h6>
-                                <div class="display-6 currency-rate text-success mb-2">
-                                    ${toAedRateDisplay}
-                                </div>
-                                <small class="text-muted">
-                                    ${currency.has_exchange_rates ?
-                                        `Exchange sells: ${toAedRateDisplay} AED<br><span class="badge bg-danger">Live Rate</span>` :
-                                        `1 ${currency.symbol} = ${toAedRateDisplay} AED<br><span class="badge bg-secondary">Reference</span>`
-                                    }
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.insertAdjacentHTML('beforeend', cardHtml);
-            }
-            
-            toAedCurrentPage++;
-            
-            // Show/hide load more button
-            if (endIndex >= currencies.length) {
-                loadMoreBtn.style.display = 'none';
-            } else {
-                loadMoreBtn.style.display = 'inline-block';
-            }
-        }
-        
-        function handleScroll() {
-            const fromAedContainer = document.getElementById('fromAedContainer');
-            const toAedContainer = document.getElementById('toAedContainer');
-            
-            // Check if user scrolled near the bottom of Buy section
-            const fromAedRect = fromAedContainer.getBoundingClientRect();
-            if (fromAedRect.bottom <= window.innerHeight + 200 && fromAedCurrentPage * ITEMS_PER_PAGE < currencies.length) {
-                loadFromAedCards();
-            }
-            
-            // Check if user scrolled near the bottom of Sell section
-            const toAedRect = toAedContainer.getBoundingClientRect();
-            if (toAedRect.bottom <= window.innerHeight + 200 && toAedCurrentPage * ITEMS_PER_PAGE < currencies.length) {
-                loadToAedCards();
-            }
-        }
-        
-        // Load more button handlers
-        document.getElementById('loadMoreFromAed').addEventListener('click', loadFromAedCards);
-        document.getElementById('loadMoreToAed').addEventListener('click', loadToAedCards);
-        
         // Currency info modal functionality
         function showCurrencyInfo(currencyId) {
             const modal = new bootstrap.Modal(document.getElementById('currencyInfoModal'));
@@ -676,17 +303,17 @@
                             <h6><i class="fas fa-sticky-note me-2"></i>Notes:</h6>
                             <p class="text-muted">${data.notes}</p>
                         </div>
-                        ${data.has_rate_range ? `
+                        ${data.has_exchange_rates ? `
                         <div class="mb-3">
                             <h6><i class="fas fa-chart-line me-2"></i>Rate Information:</h6>
                             <div class="row">
                                 <div class="col-6">
-                                    <small class="text-muted">Sell Range:</small>
-                                    <div class="fw-bold">${data.rate_range_display}</div>
+                                    <small class="text-muted">Buying Range:</small>
+                                    <div class="fw-bold">${data.buying_rate_display}</div>
                                 </div>
                                 <div class="col-6">
-                                    <small class="text-muted">Buy Range:</small>
-                                    <div class="fw-bold">${data.from_aed_range_display}</div>
+                                    <small class="text-muted">Selling Range:</small>
+                                    <div class="fw-bold">${data.selling_rate_display}</div>
                                 </div>
                             </div>
                         </div>

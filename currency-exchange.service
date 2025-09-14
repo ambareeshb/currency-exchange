@@ -1,0 +1,43 @@
+[Unit]
+Description=Currency Exchange Flask Application
+After=network.target
+Wants=network.target
+
+[Service]
+Type=notify
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/opt/currency-exchange
+Environment=PATH=/opt/currency-exchange/venv/bin
+Environment=FLASK_ENV=production
+Environment=DEBUG=false
+EnvironmentFile=/opt/currency-exchange/.env.aws
+ExecStart=/opt/currency-exchange/venv/bin/gunicorn --config gunicorn.conf.py app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=30
+PrivateTmp=true
+Restart=always
+RestartSec=10
+
+# Systemd journal logging configuration
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=currency-exchange
+
+# Security settings
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/currency-exchange
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

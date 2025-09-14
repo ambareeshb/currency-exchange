@@ -44,6 +44,14 @@ Thumbs.db
 *.db
 *.sqlite3
 instance/
+currency_exchange.db
+
+# Development artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
 
 # Logs
 *.log
