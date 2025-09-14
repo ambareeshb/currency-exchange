@@ -132,10 +132,34 @@ EOF
         print_warning "⚠️  Database connection failed. Check RDS configuration."
     fi
 
-    # Create log directories with enhanced structure
-    print_status "Creating log directories..."
+    # Create log directories with enhanced structure and proper permissions
+    print_status "Setting up comprehensive logging directories..."
     sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    sudo chown ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    sudo chown -R ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    sudo chmod -R 755 /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    
+    # Create initial log files with proper permissions
+    sudo touch /var/log/currency-exchange/app.log
+    sudo touch /var/log/gunicorn/access.log
+    sudo touch /var/log/gunicorn/error.log
+    sudo chown ec2-user:ec2-user /var/log/currency-exchange/app.log
+    sudo chown ec2-user:ec2-user /var/log/gunicorn/access.log
+    sudo chown ec2-user:ec2-user /var/log/gunicorn/error.log
+    sudo chmod 644 /var/log/currency-exchange/app.log
+    sudo chmod 644 /var/log/gunicorn/access.log
+    sudo chmod 644 /var/log/gunicorn/error.log
+    
+    # Test logging setup
+    print_status "Testing logging setup..."
+    echo "$(date): Logging setup completed during deployment" | sudo tee -a /var/log/currency-exchange/app.log > /dev/null
+    echo "$(date): Gunicorn access log initialized" | sudo tee -a /var/log/gunicorn/access.log > /dev/null
+    echo "$(date): Gunicorn error log initialized" | sudo tee -a /var/log/gunicorn/error.log > /dev/null
+    
+    print_status "✅ Logging directories and files created successfully!"
+    print_status "Log files:"
+    print_status "  - Application logs: /var/log/currency-exchange/app.log"
+    print_status "  - Gunicorn access logs: /var/log/gunicorn/access.log"
+    print_status "  - Gunicorn error logs: /var/log/gunicorn/error.log"
     
     # Set up log rotation to prevent disk space issues
     sudo tee /etc/logrotate.d/currency-exchange > /dev/null << 'EOF'
@@ -371,14 +395,26 @@ else
     print_status "Updating dependencies..."
     pip install -r requirements.txt
     
-    # Ensure log directories exist during updates
-    print_status "Creating/updating log directories..."
+    # Ensure log directories exist during updates with proper permissions
+    print_status "Verifying and updating log directories..."
     sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
-    sudo chown ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    sudo chown -R ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    sudo chmod -R 755 /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
     
-    # Create log files if they don't exist
-    sudo touch /var/log/gunicorn/access.log /var/log/gunicorn/error.log
-    sudo chown ec2-user:ec2-user /var/log/gunicorn/access.log /var/log/gunicorn/error.log
+    # Create log files if they don't exist with proper permissions
+    sudo touch /var/log/currency-exchange/app.log
+    sudo touch /var/log/gunicorn/access.log
+    sudo touch /var/log/gunicorn/error.log
+    sudo chown ec2-user:ec2-user /var/log/currency-exchange/app.log
+    sudo chown ec2-user:ec2-user /var/log/gunicorn/access.log
+    sudo chown ec2-user:ec2-user /var/log/gunicorn/error.log
+    sudo chmod 644 /var/log/currency-exchange/app.log
+    sudo chmod 644 /var/log/gunicorn/access.log
+    sudo chmod 644 /var/log/gunicorn/error.log
+    
+    # Log the update
+    echo "$(date): Application updated via deployment script" | sudo tee -a /var/log/currency-exchange/app.log > /dev/null
+    print_status "✅ Logging directories verified and updated"
     
     # Ensure recovery services are created/updated during updates too
     print_status "Creating/updating socket recovery services..."
@@ -525,5 +561,34 @@ else
     print_header "🎉 Update deployment completed successfully!"
 fi
 
-print_status "Recent logs:"
+print_status "Verifying logging setup..."
+# Check if log files exist and are writable
+if [ -f "/var/log/currency-exchange/app.log" ] && [ -w "/var/log/currency-exchange/app.log" ]; then
+    print_status "✅ Application log file is accessible"
+else
+    print_warning "⚠️  Application log file may have permission issues"
+fi
+
+if [ -f "/var/log/gunicorn/access.log" ] && [ -w "/var/log/gunicorn/access.log" ]; then
+    print_status "✅ Gunicorn access log is accessible"
+else
+    print_warning "⚠️  Gunicorn access log may have permission issues"
+fi
+
+if [ -f "/var/log/gunicorn/error.log" ] && [ -w "/var/log/gunicorn/error.log" ]; then
+    print_status "✅ Gunicorn error log is accessible"
+else
+    print_warning "⚠️  Gunicorn error log may have permission issues"
+fi
+
+print_status "Recent application logs:"
+sudo tail -n 5 /var/log/currency-exchange/app.log 2>/dev/null || echo "No application logs yet"
+
+print_status "Recent systemd logs:"
 sudo journalctl -u $SERVICE_NAME --no-pager -n 5
+
+print_status "Log file locations:"
+print_status "  - Application: /var/log/currency-exchange/app.log"
+print_status "  - Gunicorn Access: /var/log/gunicorn/access.log"
+print_status "  - Gunicorn Error: /var/log/gunicorn/error.log"
+print_status "  - Systemd Journal: sudo journalctl -u $SERVICE_NAME"
