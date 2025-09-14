@@ -53,10 +53,65 @@ class Currency(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     symbol = db.Column(db.String(10), nullable=False, unique=True)
-    rate_to_aed = db.Column(db.Float, nullable=False)  # How much of this currency equals 1 AED
+    # Buying rate range (exchange buys currency from customer)
+    min_buying_rate_to_aed = db.Column(db.Float, nullable=True)  # Minimum buying rate
+    max_buying_rate_to_aed = db.Column(db.Float, nullable=True)  # Maximum buying rate
+    # Selling rate range (exchange sells currency to customer)
+    min_selling_rate_to_aed = db.Column(db.Float, nullable=True)  # Minimum selling rate
+    max_selling_rate_to_aed = db.Column(db.Float, nullable=True)  # Maximum selling rate
+    admin_notes = db.Column(db.Text, nullable=True)  # Admin notes about this currency
     
     def __repr__(self):
         return f'<Currency {self.symbol}: {self.name}>'
+    
+    @property
+    def has_buying_range(self):
+        """Check if currency has buying rate range defined"""
+        return self.min_buying_rate_to_aed is not None and self.max_buying_rate_to_aed is not None
+    
+    @property
+    def has_selling_range(self):
+        """Check if currency has selling rate range defined"""
+        return self.min_selling_rate_to_aed is not None and self.max_selling_rate_to_aed is not None
+    
+    @property
+    def has_exchange_rates(self):
+        """Check if currency has any exchange rates defined"""
+        return self.has_buying_range or self.has_selling_range
+    
+    @property
+    def buying_rate_display(self):
+        """Get formatted buying rate range for display"""
+        if self.has_buying_range:
+            return f"{self.min_buying_rate_to_aed:.6f} - {self.max_buying_rate_to_aed:.6f}"
+        return "Not set"
+    
+    @property
+    def selling_rate_display(self):
+        """Get formatted selling rate range for display"""
+        if self.has_selling_range:
+            return f"{self.min_selling_rate_to_aed:.6f} - {self.max_selling_rate_to_aed:.6f}"
+        return "Not set"
+    
+    @property
+    def buying_from_aed_display(self):
+        """Get AED to currency rate range when exchange buys (customer sells AED)"""
+        if self.has_selling_range:
+            # When customer sells AED, they get foreign currency at selling rate (inverted)
+            min_rate = 1 / self.max_selling_rate_to_aed
+            max_rate = 1 / self.min_selling_rate_to_aed
+            return f"{min_rate:.6f} - {max_rate:.6f}"
+        return "Not set"
+    
+    @property
+    def selling_from_aed_display(self):
+        """Get AED to currency rate range when exchange sells (customer buys AED)"""
+        if self.has_buying_range:
+            # When customer buys AED, they pay foreign currency at buying rate (inverted)
+            min_rate = 1 / self.max_buying_rate_to_aed
+            max_rate = 1 / self.min_buying_rate_to_aed
+            return f"{min_rate:.6f} - {max_rate:.6f}"
+        return "Not set"
 
 @app.route('/')
 def index():
@@ -66,7 +121,18 @@ def index():
             'id': c.id,
             'name': c.name,
             'symbol': c.symbol,
-            'rate_to_aed': c.rate_to_aed
+            'min_buying_rate_to_aed': c.min_buying_rate_to_aed,
+            'max_buying_rate_to_aed': c.max_buying_rate_to_aed,
+            'min_selling_rate_to_aed': c.min_selling_rate_to_aed,
+            'max_selling_rate_to_aed': c.max_selling_rate_to_aed,
+            'admin_notes': c.admin_notes,
+            'has_exchange_rates': c.has_exchange_rates,
+            'has_buying_range': c.has_buying_range,
+            'has_selling_range': c.has_selling_range,
+            'buying_rate_display': c.buying_rate_display,
+            'selling_rate_display': c.selling_rate_display,
+            'buying_from_aed_display': c.buying_from_aed_display,
+            'selling_from_aed_display': c.selling_from_aed_display
         }
         for c in currencies_db
     ]
@@ -106,7 +172,36 @@ def dashboard():
 def add_currency():
     name = request.form['name']
     symbol = request.form['symbol'].upper()
-    rate_to_aed = float(request.form['rate_to_aed'])
+    admin_notes = request.form.get('admin_notes', '').strip()
+    
+    # Handle buying rate range
+    min_buying_rate = None
+    max_buying_rate = None
+    if request.form.get('min_buying_rate_to_aed') and request.form.get('max_buying_rate_to_aed'):
+        min_buying_rate = float(request.form['min_buying_rate_to_aed'])
+        max_buying_rate = float(request.form['max_buying_rate_to_aed'])
+        
+        # Validate buying range
+        if min_buying_rate >= max_buying_rate:
+            flash('Minimum buying rate must be less than maximum buying rate', 'error')
+            return redirect(url_for('dashboard'))
+    
+    # Handle selling rate range
+    min_selling_rate = None
+    max_selling_rate = None
+    if request.form.get('min_selling_rate_to_aed') and request.form.get('max_selling_rate_to_aed'):
+        min_selling_rate = float(request.form['min_selling_rate_to_aed'])
+        max_selling_rate = float(request.form['max_selling_rate_to_aed'])
+        
+        # Validate selling range
+        if min_selling_rate >= max_selling_rate:
+            flash('Minimum selling rate must be less than maximum selling rate', 'error')
+            return redirect(url_for('dashboard'))
+    
+    # Validate that buying rates are lower than selling rates
+    if min_buying_rate and min_selling_rate and max_buying_rate >= min_selling_rate:
+        flash('Buying rates must be lower than selling rates', 'error')
+        return redirect(url_for('dashboard'))
     
     # Check if currency symbol already exists
     existing = Currency.query.filter_by(symbol=symbol).first()
@@ -114,7 +209,15 @@ def add_currency():
         flash(f'Currency with symbol {symbol} already exists', 'error')
         return redirect(url_for('dashboard'))
     
-    currency = Currency(name=name, symbol=symbol, rate_to_aed=rate_to_aed)
+    currency = Currency(
+        name=name,
+        symbol=symbol,
+        min_buying_rate_to_aed=min_buying_rate,
+        max_buying_rate_to_aed=max_buying_rate,
+        min_selling_rate_to_aed=min_selling_rate,
+        max_selling_rate_to_aed=max_selling_rate,
+        admin_notes=admin_notes if admin_notes else None
+    )
     db.session.add(currency)
     db.session.commit()
     
@@ -123,7 +226,18 @@ def add_currency():
         'id': currency.id,
         'name': currency.name,
         'symbol': currency.symbol,
-        'rate_to_aed': currency.rate_to_aed
+        'min_buying_rate_to_aed': currency.min_buying_rate_to_aed,
+        'max_buying_rate_to_aed': currency.max_buying_rate_to_aed,
+        'min_selling_rate_to_aed': currency.min_selling_rate_to_aed,
+        'max_selling_rate_to_aed': currency.max_selling_rate_to_aed,
+        'admin_notes': currency.admin_notes,
+        'has_exchange_rates': currency.has_exchange_rates,
+        'has_buying_range': currency.has_buying_range,
+        'has_selling_range': currency.has_selling_range,
+        'buying_rate_display': currency.buying_rate_display,
+        'selling_rate_display': currency.selling_rate_display,
+        'buying_from_aed_display': currency.buying_from_aed_display,
+        'selling_from_aed_display': currency.selling_from_aed_display
     })
     
     flash(f'Currency {symbol} added successfully', 'success')
@@ -134,7 +248,45 @@ def add_currency():
 def update_currency(currency_id):
     currency = Currency.query.get_or_404(currency_id)
     currency.name = request.form['name']
-    currency.rate_to_aed = float(request.form['rate_to_aed'])
+    currency.admin_notes = request.form.get('admin_notes', '').strip() or None
+    
+    # Handle buying rate range
+    if request.form.get('min_buying_rate_to_aed') and request.form.get('max_buying_rate_to_aed'):
+        min_buying_rate = float(request.form['min_buying_rate_to_aed'])
+        max_buying_rate = float(request.form['max_buying_rate_to_aed'])
+        
+        # Validate buying range
+        if min_buying_rate >= max_buying_rate:
+            flash('Minimum buying rate must be less than maximum buying rate', 'error')
+            return redirect(url_for('dashboard'))
+            
+        currency.min_buying_rate_to_aed = min_buying_rate
+        currency.max_buying_rate_to_aed = max_buying_rate
+    else:
+        currency.min_buying_rate_to_aed = None
+        currency.max_buying_rate_to_aed = None
+    
+    # Handle selling rate range
+    if request.form.get('min_selling_rate_to_aed') and request.form.get('max_selling_rate_to_aed'):
+        min_selling_rate = float(request.form['min_selling_rate_to_aed'])
+        max_selling_rate = float(request.form['max_selling_rate_to_aed'])
+        
+        # Validate selling range
+        if min_selling_rate >= max_selling_rate:
+            flash('Minimum selling rate must be less than maximum selling rate', 'error')
+            return redirect(url_for('dashboard'))
+            
+        currency.min_selling_rate_to_aed = min_selling_rate
+        currency.max_selling_rate_to_aed = max_selling_rate
+    else:
+        currency.min_selling_rate_to_aed = None
+        currency.max_selling_rate_to_aed = None
+    
+    # Validate that buying rates are lower than selling rates
+    if (currency.min_buying_rate_to_aed and currency.min_selling_rate_to_aed and
+        currency.max_buying_rate_to_aed >= currency.min_selling_rate_to_aed):
+        flash('Buying rates must be lower than selling rates', 'error')
+        return redirect(url_for('dashboard'))
     
     db.session.commit()
     
@@ -143,7 +295,18 @@ def update_currency(currency_id):
         'id': currency.id,
         'name': currency.name,
         'symbol': currency.symbol,
-        'rate_to_aed': currency.rate_to_aed
+        'min_buying_rate_to_aed': currency.min_buying_rate_to_aed,
+        'max_buying_rate_to_aed': currency.max_buying_rate_to_aed,
+        'min_selling_rate_to_aed': currency.min_selling_rate_to_aed,
+        'max_selling_rate_to_aed': currency.max_selling_rate_to_aed,
+        'admin_notes': currency.admin_notes,
+        'has_exchange_rates': currency.has_exchange_rates,
+        'has_buying_range': currency.has_buying_range,
+        'has_selling_range': currency.has_selling_range,
+        'buying_rate_display': currency.buying_rate_display,
+        'selling_rate_display': currency.selling_rate_display,
+        'buying_from_aed_display': currency.buying_from_aed_display,
+        'selling_from_aed_display': currency.selling_from_aed_display
     })
     
     flash(f'Currency {currency.symbol} updated successfully', 'success')
@@ -179,6 +342,24 @@ def from_aed():
 def to_aed():
     currencies = Currency.query.order_by(Currency.symbol.asc()).all()
     return render_template('to_aed.html', currencies=currencies)
+
+@app.route('/currency_notes/<int:currency_id>')
+def get_currency_notes(currency_id):
+    """Get currency notes for info button"""
+    currency = Currency.query.get_or_404(currency_id)
+    return {
+        'id': currency.id,
+        'symbol': currency.symbol,
+        'name': currency.name,
+        'notes': currency.admin_notes or 'No notes available for this currency.',
+        'has_exchange_rates': currency.has_exchange_rates,
+        'buying_rate_display': currency.buying_rate_display,
+        'selling_rate_display': currency.selling_rate_display,
+        'buying_rate_display': currency.buying_rate_display,
+        'selling_rate_display': currency.selling_rate_display,
+        'buying_from_aed_display': currency.buying_from_aed_display,
+        'selling_from_aed_display': currency.selling_from_aed_display
+    }
 
 @app.route('/admin')
 def admin_redirect():

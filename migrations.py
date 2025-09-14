@@ -19,6 +19,10 @@ def run_migrations():
         # Migration 001: Update password_hash column length
         migration_001_update_password_hash_length()
         
+        # Migration 003: Add new currency fields
+        print("Running migration 003: Add currency notes and rate range fields...")
+        migration_003_add_currency_fields()
+        
         # Create all tables
         print("Creating database tables...")
         db.create_all()
@@ -103,16 +107,93 @@ def migration_002_create_admin_user():
         else:
             print(f"Admin user {admin_username} already exists with correct password")
 
+def migration_003_add_currency_fields():
+    """Migration 003: Add admin_notes and rate range fields to currency table"""
+    from app import db
+    
+    try:
+        # Check if currency table exists and if new columns need to be added
+        inspector = db.inspect(db.engine)
+        if 'currency' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('currency')]
+            
+            # Check which columns need to be added
+            columns_to_add = []
+            
+            if 'admin_notes' not in columns:
+                columns_to_add.append('admin_notes')
+            if 'min_buying_rate_to_aed' not in columns:
+                columns_to_add.append('min_buying_rate_to_aed')
+            if 'max_buying_rate_to_aed' not in columns:
+                columns_to_add.append('max_buying_rate_to_aed')
+            if 'min_selling_rate_to_aed' not in columns:
+                columns_to_add.append('min_selling_rate_to_aed')
+            if 'max_selling_rate_to_aed' not in columns:
+                columns_to_add.append('max_selling_rate_to_aed')
+            
+            if columns_to_add:
+                print(f"Adding columns to currency table: {columns_to_add}")
+                
+                if db.engine.dialect.name == 'postgresql':
+                    with db.engine.connect() as connection:
+                        if 'admin_notes' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN admin_notes TEXT;"))
+                        if 'min_buying_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN min_buying_rate_to_aed FLOAT;"))
+                        if 'max_buying_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN max_buying_rate_to_aed FLOAT;"))
+                        if 'min_selling_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN min_selling_rate_to_aed FLOAT;"))
+                        if 'max_selling_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN max_selling_rate_to_aed FLOAT;"))
+                        
+                        connection.commit()
+                        print("✅ Updated currency table columns (PostgreSQL)")
+                        
+                elif db.engine.dialect.name == 'sqlite':
+                    with db.engine.connect() as connection:
+                        if 'admin_notes' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN admin_notes TEXT;"))
+                        if 'min_buying_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN min_buying_rate_to_aed REAL;"))
+                        if 'max_buying_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN max_buying_rate_to_aed REAL;"))
+                        if 'min_selling_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN min_selling_rate_to_aed REAL;"))
+                        if 'max_selling_rate_to_aed' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN max_selling_rate_to_aed REAL;"))
+                        
+                        connection.commit()
+                        print("✅ Updated currency table columns (SQLite)")
+                else:
+                    print(f"Unknown database dialect: {db.engine.dialect.name}")
+            else:
+                print("Currency table already has all required columns")
+        else:
+            print("Currency table doesn't exist yet, will be created with correct schema")
+            
+    except Exception as e:
+        print(f"Currency table migration failed: {e}")
+        print("New columns will be created when table is created")
+
 def load_sample_data():
     """Load sample currency data for development"""
     from app import Currency
     
     if Currency.query.count() == 0:
         sample_currencies = [
-            Currency(name='US Dollar', symbol='USD', rate_to_aed=0.27),
-            Currency(name='Euro', symbol='EUR', rate_to_aed=0.25),
-            Currency(name='British Pound', symbol='GBP', rate_to_aed=0.22),
-            Currency(name='Japanese Yen', symbol='JPY', rate_to_aed=30.0),
+            Currency(name='US Dollar', symbol='USD',
+                    min_buying_rate_to_aed=3.65, max_buying_rate_to_aed=3.67,
+                    min_selling_rate_to_aed=3.68, max_selling_rate_to_aed=3.70),
+            Currency(name='Euro', symbol='EUR',
+                    min_buying_rate_to_aed=3.95, max_buying_rate_to_aed=3.97,
+                    min_selling_rate_to_aed=4.00, max_selling_rate_to_aed=4.02),
+            Currency(name='British Pound', symbol='GBP',
+                    min_buying_rate_to_aed=4.50, max_buying_rate_to_aed=4.52,
+                    min_selling_rate_to_aed=4.55, max_selling_rate_to_aed=4.57),
+            Currency(name='Japanese Yen', symbol='JPY',
+                    min_buying_rate_to_aed=0.025, max_buying_rate_to_aed=0.027,
+                    min_selling_rate_to_aed=0.028, max_selling_rate_to_aed=0.030),
         ]
         for currency in sample_currencies:
             db.session.add(currency)

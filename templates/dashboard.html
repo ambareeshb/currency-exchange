@@ -27,10 +27,45 @@
                         <input type="text" class="form-control" id="symbol" name="symbol" placeholder="e.g., USD" maxlength="10" required>
                     </div>
                     <div class="mb-3">
-                        <label for="rate_to_aed" class="form-label">Rate to AED</label>
-                        <input type="number" class="form-control" id="rate_to_aed" name="rate_to_aed" 
-                               step="0.000001" placeholder="e.g., 0.27" required>
-                        <div class="form-text">How much of this currency equals 1 AED</div>
+                        <label class="form-label">Buying Rate Range (Exchange buys currency from customer)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="min_buying_rate_to_aed" class="form-label text-success">Min Buying Rate</label>
+                                <input type="number" class="form-control" id="min_buying_rate_to_aed" name="min_buying_rate_to_aed"
+                                       step="0.000001" placeholder="e.g., 3.65" value="3.65">
+                                <small class="text-muted">Minimum rate when exchange buys</small>
+                            </div>
+                            <div class="col-6">
+                                <label for="max_buying_rate_to_aed" class="form-label text-success">Max Buying Rate</label>
+                                <input type="number" class="form-control" id="max_buying_rate_to_aed" name="max_buying_rate_to_aed"
+                                       step="0.000001" placeholder="e.g., 3.67" value="3.67">
+                                <small class="text-muted">Maximum rate when exchange buys</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Selling Rate Range (Exchange sells currency to customer)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="min_selling_rate_to_aed" class="form-label text-danger">Min Selling Rate</label>
+                                <input type="number" class="form-control" id="min_selling_rate_to_aed" name="min_selling_rate_to_aed"
+                                       step="0.000001" placeholder="e.g., 3.68" value="3.68">
+                                <small class="text-muted">Minimum rate when exchange sells</small>
+                            </div>
+                            <div class="col-6">
+                                <label for="max_selling_rate_to_aed" class="form-label text-danger">Max Selling Rate</label>
+                                <input type="number" class="form-control" id="max_selling_rate_to_aed" name="max_selling_rate_to_aed"
+                                       step="0.000001" placeholder="e.g., 3.70" value="3.70">
+                                <small class="text-muted">Maximum rate when exchange sells</small>
+                            </div>
+                        </div>
+                        <div class="form-text">Set rate ranges for exchange operations. Buying rates should be lower than selling rates.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="admin_notes" class="form-label">Admin Notes</label>
+                        <textarea class="form-control" id="admin_notes" name="admin_notes" rows="3"
+                                  placeholder="Add notes about this currency (visible to public via info button)"></textarea>
+                        <div class="form-text">These notes will be visible to users via the info button</div>
                     </div>
                     <button type="submit" class="btn btn-success w-100">
                         <i class="fas fa-plus me-2"></i>Add Currency
@@ -53,8 +88,8 @@
                             <tr>
                                 <th>Symbol <i class="fas fa-sort-alpha-down text-muted"></i></th>
                                 <th>Name</th>
-                                <th>Rate to AED</th>
-                                <th>Rate from AED</th>
+                                <th>Admin Rates</th>
+                                <th>Notes</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -63,17 +98,32 @@
                             <tr>
                                 <td><strong>{{ currency.symbol }}</strong></td>
                                 <td>{{ currency.name }}</td>
-                                <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed) }}</td>
-                                <td class="currency-rate">{{ "%.6f"|format(1/currency.rate_to_aed) }}</td>
+                                <td class="currency-rate">
+                                    {% if currency.has_exchange_rates %}
+                                        <div class="d-flex flex-column">
+                                            <span class="text-success">Buy: {{ currency.buying_rate_display }}</span>
+                                            <span class="text-danger">Sell: {{ currency.selling_rate_display }}</span>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">No rates set</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if currency.admin_notes %}
+                                        <i class="fas fa-sticky-note text-info" title="Has notes"></i>
+                                    {% else %}
+                                        <i class="fas fa-sticky-note text-muted" title="No notes"></i>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
-                                        <button type="button" class="btn btn-outline-primary" 
-                                                data-bs-toggle="modal" 
+                                        <button type="button" class="btn btn-outline-primary"
+                                                data-bs-toggle="modal"
                                                 data-bs-target="#editModal{{ currency.id }}">
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button type="button" class="btn btn-outline-danger" 
-                                                data-bs-toggle="modal" 
+                                        <button type="button" class="btn btn-outline-danger"
+                                                data-bs-toggle="modal"
                                                 data-bs-target="#deleteModal{{ currency.id }}">
                                             <i class="fas fa-trash"></i>
                                         </button>
@@ -108,14 +158,53 @@
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="edit_name{{ currency.id }}" class="form-label">Currency Name</label>
-                        <input type="text" class="form-control" id="edit_name{{ currency.id }}" 
+                        <input type="text" class="form-control" id="edit_name{{ currency.id }}"
                                name="name" value="{{ currency.name }}" required>
                     </div>
                     <div class="mb-3">
-                        <label for="edit_rate{{ currency.id }}" class="form-label">Rate to AED</label>
-                        <input type="number" class="form-control" id="edit_rate{{ currency.id }}" 
-                               name="rate_to_aed" value="{{ currency.rate_to_aed }}" step="0.000001" required>
-                        <div class="form-text">How much of this currency equals 1 AED</div>
+                        <label class="form-label">Buying Rate Range (Exchange buys currency from customer)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="edit_min_buying_rate{{ currency.id }}" class="form-label text-success">Min Buying Rate</label>
+                                <input type="number" class="form-control" id="edit_min_buying_rate{{ currency.id }}"
+                                       name="min_buying_rate_to_aed" value="{{ currency.min_buying_rate_to_aed or '' }}"
+                                       step="0.000001" placeholder="Minimum buying rate">
+                                <small class="text-muted">Minimum rate when exchange buys</small>
+                            </div>
+                            <div class="col-6">
+                                <label for="edit_max_buying_rate{{ currency.id }}" class="form-label text-success">Max Buying Rate</label>
+                                <input type="number" class="form-control" id="edit_max_buying_rate{{ currency.id }}"
+                                       name="max_buying_rate_to_aed" value="{{ currency.max_buying_rate_to_aed or '' }}"
+                                       step="0.000001" placeholder="Maximum buying rate">
+                                <small class="text-muted">Maximum rate when exchange buys</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Selling Rate Range (Exchange sells currency to customer)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="edit_min_selling_rate{{ currency.id }}" class="form-label text-danger">Min Selling Rate</label>
+                                <input type="number" class="form-control" id="edit_min_selling_rate{{ currency.id }}"
+                                       name="min_selling_rate_to_aed" value="{{ currency.min_selling_rate_to_aed or '' }}"
+                                       step="0.000001" placeholder="Minimum selling rate">
+                                <small class="text-muted">Minimum rate when exchange sells</small>
+                            </div>
+                            <div class="col-6">
+                                <label for="edit_max_selling_rate{{ currency.id }}" class="form-label text-danger">Max Selling Rate</label>
+                                <input type="number" class="form-control" id="edit_max_selling_rate{{ currency.id }}"
+                                       name="max_selling_rate_to_aed" value="{{ currency.max_selling_rate_to_aed or '' }}"
+                                       step="0.000001" placeholder="Maximum selling rate">
+                                <small class="text-muted">Maximum rate when exchange sells</small>
+                            </div>
+                        </div>
+                        <div class="form-text">Set rate ranges for exchange operations. Buying rates should be lower than selling rates.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_notes{{ currency.id }}" class="form-label">Admin Notes</label>
+                        <textarea class="form-control" id="edit_notes{{ currency.id }}" name="admin_notes" rows="3"
+                                  placeholder="Add notes about this currency">{{ currency.admin_notes or '' }}</textarea>
+                        <div class="form-text">These notes will be visible to users via the info button</div>
                     </div>
                 </div>
                 <div class="modal-footer">

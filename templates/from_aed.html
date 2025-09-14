@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}From AED - Currency Exchange Admin{% endblock %}
+{% block title %}Buy - Currency Exchange Admin{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h2><i class="fas fa-arrow-right me-2"></i>From AED Exchange Rates</h2>
-        <p class="text-muted">How much other currencies are worth in AED (1 AED = X other currency)</p>
+        <h2><i class="fas fa-arrow-right me-2"></i>Exchange Buys Foreign Currency</h2>
+        <p class="text-muted">Rates when you sell AED to the exchange (Exchange buys AED from you)</p>
     </div>
 </div>
 
@@ -14,23 +14,46 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5><i class="fas fa-exchange-alt me-2"></i>1 AED equals:</h5>
+                <h5><i class="fas fa-exchange-alt me-2"></i>Exchange buys 1 AED for:</h5>
             </div>
             <div class="card-body">
                 {% if currencies %}
                 <div class="row">
                     {% for currency in currencies %}
                     <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="card border-primary">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">{{ currency.symbol }}</h5>
-                                <h6 class="card-subtitle mb-2 text-muted">{{ currency.name }}</h6>
-                                <div class="display-6 currency-rate text-primary">
-                                    {{ "%.6f"|format(currency.rate_to_aed) }}
+                        <div class="card border-primary h-100">
+                            <div class="card-body text-center d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h5 class="card-title mb-0">{{ currency.symbol }}</h5>
+                                    <button type="button" class="btn btn-sm btn-outline-info"
+                                            onclick="showCurrencyInfo({{ currency.id }})"
+                                            title="View currency information">
+                                        <i class="fas fa-info"></i>
+                                    </button>
                                 </div>
-                                <small class="text-muted">
-                                    1 AED = {{ "%.6f"|format(currency.rate_to_aed) }} {{ currency.symbol }}
-                                </small>
+                                <h6 class="card-subtitle mb-3 text-muted">{{ currency.name }}</h6>
+                                <div class="flex-grow-1 d-flex flex-column justify-content-center">
+                                    <div class="display-6 currency-rate text-primary mb-2">
+                                        {% if currency.has_buying_range %}
+                                            <div>{{ currency.buying_rate_display }}</div>
+                                            <small class="d-block text-muted mt-1">Exchange buys at</small>
+                                        {% else %}
+                                            <div class="text-muted">No rates set</div>
+                                            <small class="d-block text-muted mt-1">Contact for rates</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="mt-auto">
+                                    <small class="text-muted">
+                                        {% if currency.has_buying_range %}
+                                            Exchange buys 1 AED for {{ currency.buying_rate_display }} {{ currency.symbol }}
+                                            <br><span class="badge bg-success mt-1">Live Rate</span>
+                                        {% else %}
+                                            <span class="text-muted">No buying rates available</span>
+                                            <br><span class="badge bg-secondary mt-1">Contact Us</span>
+                                        {% endif %}
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -64,10 +87,11 @@
                             <tr>
                                 <th>Currency</th>
                                 <th>Symbol <i class="fas fa-sort-alpha-down text-muted"></i></th>
-                                <th>1 AED =</th>
-                                <th>5 AED =</th>
-                                <th>10 AED =</th>
-                                <th>100 AED =</th>
+                                <th>Exchange buys 1 AED for</th>
+                                <th>Exchange buys 5 AED for</th>
+                                <th>Exchange buys 10 AED for</th>
+                                <th>Exchange buys 100 AED for</th>
+                                <th>Info</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -75,10 +99,49 @@
                             <tr>
                                 <td><strong>{{ currency.name }}</strong></td>
                                 <td><span class="badge bg-secondary">{{ currency.symbol }}</span></td>
-                                <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed) }}</td>
-                                <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed * 5) }}</td>
-                                <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed * 10) }}</td>
-                                <td class="currency-rate">{{ "%.6f"|format(currency.rate_to_aed * 100) }}</td>
+                                <td class="currency-rate">
+                                    {% if currency.has_buying_range %}
+                                        <span class="text-success">{{ currency.buying_rate_display }}</span>
+                                        <small class="text-muted d-block">Live buying rate</small>
+                                    {% else %}
+                                        <span class="text-muted">No rates set</span>
+                                        <small class="text-muted d-block">Contact for rates</small>
+                                    {% endif %}
+                                </td>
+                                <td class="currency-rate">
+                                    {% if currency.has_buying_range %}
+                                        <span class="text-success">{{ "%.6f - %.6f"|format(currency.min_buying_rate_to_aed * 5, currency.max_buying_rate_to_aed * 5) }}</span>
+                                        <small class="text-muted d-block">Live rate range</small>
+                                    {% else %}
+                                        <span class="text-muted">Contact for rates</span>
+                                        <small class="text-muted d-block">No rates set</small>
+                                    {% endif %}
+                                </td>
+                                <td class="currency-rate">
+                                    {% if currency.has_buying_range %}
+                                        <span class="text-success">{{ "%.6f - %.6f"|format(currency.min_buying_rate_to_aed * 10, currency.max_buying_rate_to_aed * 10) }}</span>
+                                        <small class="text-muted d-block">Live rate range</small>
+                                    {% else %}
+                                        <span class="text-muted">Contact for rates</span>
+                                        <small class="text-muted d-block">No rates set</small>
+                                    {% endif %}
+                                </td>
+                                <td class="currency-rate">
+                                    {% if currency.has_buying_range %}
+                                        <span class="text-success">{{ "%.6f - %.6f"|format(currency.min_buying_rate_to_aed * 100, currency.max_buying_rate_to_aed * 100) }}</span>
+                                        <small class="text-muted d-block">Live rate range</small>
+                                    {% else %}
+                                        <span class="text-muted">Contact for rates</span>
+                                        <small class="text-muted d-block">No rates set</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <button type="button" class="btn btn-sm btn-outline-info"
+                                            onclick="showCurrencyInfo({{ currency.id }})"
+                                            title="View currency information">
+                                        <i class="fas fa-info"></i>
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
