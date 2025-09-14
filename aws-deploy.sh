@@ -56,6 +56,9 @@ if [ "$INITIAL_SETUP" = true ]; then
     print_status "Installing dependencies..."
     sudo yum install -y python3.11 python3.11-pip python3.11-devel git nginx postgresql15
     sudo yum groupinstall -y "Development Tools"
+    
+    # Install additional packages for socket recovery
+    sudo yum install -y htop iotop lsof
 
     # Create application directory
     print_status "Creating application directory..."
@@ -81,6 +84,9 @@ if [ "$INITIAL_SETUP" = true ]; then
     source venv/bin/activate
     pip install --upgrade pip
     pip install -r requirements.txt
+    
+    # Install additional Python packages for socket recovery
+    pip install psutil
 
     # Database configuration
     print_header "Database Configuration"
@@ -126,17 +132,48 @@ EOF
         print_warning "⚠️  Database connection failed. Check RDS configuration."
     fi
 
-    # Create log directories
+    # Create log directories with enhanced structure
     print_status "Creating log directories..."
     sudo mkdir -p /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
     sudo chown ec2-user:ec2-user /var/log/gunicorn /var/log/currency-exchange /var/run/gunicorn
+    
+    # Set up log rotation to prevent disk space issues
+    sudo tee /etc/logrotate.d/currency-exchange > /dev/null << 'EOF'
+/var/log/currency-exchange/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 644 ec2-user ec2-user
+    postrotate
+        systemctl reload currency-exchange || true
+    endscript
+}
 
-    # Create systemd service
+/var/log/gunicorn/*.log {
+    daily
+    missingok
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 644 ec2-user ec2-user
+    postrotate
+        systemctl reload currency-exchange || true
+    endscript
+}
+EOF
+
+    # Create enhanced systemd service with socket error recovery
     print_status "Creating systemd service..."
     sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null << EOF
 [Unit]
 Description=Currency Exchange Flask App
 After=network.target
+Wants=network-online.target
+After=network-online.target
 
 [Service]
 Type=simple
@@ -147,15 +184,66 @@ Environment=PATH=$APP_DIR/venv/bin
 EnvironmentFile=$APP_DIR/.env.production
 ExecStart=$APP_DIR/venv/bin/gunicorn --config $APP_DIR/gunicorn.conf.py app:app
 ExecReload=/bin/kill -s HUP \$MAINPID
+ExecStartPre=/bin/sleep 2
 KillMode=mixed
+TimeoutStartSec=60
 TimeoutStopSec=30
 Restart=always
-RestartSec=5
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+StandardOutput=journal
+StandardError=journal
+
+# Enhanced resource limits to prevent socket issues
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Memory and CPU limits
+MemoryMax=1G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Create socket recovery service
+    print_status "Creating socket recovery service..."
+    sudo tee /etc/systemd/system/currency-exchange-recovery.service > /dev/null << EOF
+[Unit]
+Description=Currency Exchange Socket Recovery Service
+After=currency-exchange.service
+Requires=currency-exchange.service
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=$APP_DIR
+Environment=PATH=$APP_DIR/venv/bin
+ExecStart=$APP_DIR/venv/bin/python $APP_DIR/socket_recovery.py --daemon
+Restart=always
+RestartSec=30
 StandardOutput=journal
 StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+    # Create socket recovery timer for regular checks
+    sudo tee /etc/systemd/system/currency-exchange-recovery.timer > /dev/null << EOF
+[Unit]
+Description=Currency Exchange Socket Recovery Timer
+Requires=currency-exchange-recovery.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=2min
+Unit=currency-exchange-recovery.service
+
+[Install]
+WantedBy=timers.target
 EOF
 
     # Domain configuration
@@ -259,11 +347,17 @@ EOF
     print_status "Testing Nginx configuration..."
     sudo nginx -t
 
-    # Enable services
+    # Enable services including recovery mechanisms
     print_status "Enabling services..."
     sudo systemctl daemon-reload
     sudo systemctl enable $SERVICE_NAME
+    sudo systemctl enable currency-exchange-recovery
+    sudo systemctl enable currency-exchange-recovery.timer
     sudo systemctl enable nginx
+    
+    # Make scripts executable
+    chmod +x $APP_DIR/monitor.sh
+    chmod +x $APP_DIR/socket_recovery.py
 
 else
     # UPDATE DEPLOYMENT
@@ -295,20 +389,29 @@ python migrations.py
 print_status "Verifying database setup..."
 python -c "
 from app import app, db, AdminUser, Currency
+from sqlalchemy import inspect
 with app.app_context():
-    print('Tables created:', db.engine.table_names())
-    admin_count = AdminUser.query.count()
-    currency_count = Currency.query.count()
-    print(f'Admin users: {admin_count}')
-    print(f'Currencies: {currency_count}')
-    if admin_count == 0:
-        print('WARNING: No admin user found!')
-    else:
-        print('✅ Admin user exists')
+    inspector = inspect(db.engine)
+    tables = inspector.get_table_names()
+    print('Tables created:', tables)
+    try:
+        admin_count = AdminUser.query.count()
+        currency_count = Currency.query.count()
+        print(f'Admin users: {admin_count}')
+        print(f'Currencies: {currency_count}')
+        if admin_count == 0:
+            print('WARNING: No admin user found!')
+        else:
+            print('✅ Admin user exists')
+    except Exception as e:
+        print(f'Database query error: {e}')
+        print('Tables may not be fully initialized yet')
 "
 
 print_status "Starting/restarting services..."
 sudo systemctl start $SERVICE_NAME
+sudo systemctl start currency-exchange-recovery
+sudo systemctl start currency-exchange-recovery.timer
 sudo systemctl start nginx
 
 # Check service status
@@ -327,6 +430,13 @@ else
     print_error "❌ Nginx failed to start"
     sudo systemctl status nginx
     exit 1
+fi
+
+# Check recovery service status
+if sudo systemctl is-active --quiet currency-exchange-recovery; then
+    print_status "✅ Socket recovery service is running"
+else
+    print_warning "⚠️  Socket recovery service not running (this is optional)"
 fi
 
 if [ "$INITIAL_SETUP" = true ]; then

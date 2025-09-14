@@ -8,3 +8,4 @@ psycopg[binary]==3.2.9
 psycopg2-binary==2.9.10
 Flask-SocketIO==5.3.6
 eventlet==0.33.3
+psutil==5.9.5

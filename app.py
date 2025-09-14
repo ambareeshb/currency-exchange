@@ -7,12 +7,23 @@ import os
 import logging
 import signal
 import sys
+import socket
+import errno
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Enhanced logging configuration with socket error tracking
+class SocketErrorFilter(logging.Filter):
+    """Filter to track and handle socket-related errors"""
+    def filter(self, record):
+        # Log socket errors but don't let them crash the app
+        if hasattr(record, 'msg') and 'Bad file descriptor' in str(record.msg):
+            record.msg = f"[SOCKET_ERROR_HANDLED] {record.msg}"
+        return True
+
+# Configure enhanced logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(name)s %(message)s',
@@ -22,16 +33,35 @@ logging.basicConfig(
     ]
 )
 
+# Add socket error filter to all loggers
+socket_filter = SocketErrorFilter()
+logging.getLogger().addFilter(socket_filter)
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Configure Flask logging
+# Configure Flask logging with socket error handling
 app.logger.setLevel(logging.INFO)
+app.logger.addFilter(socket_filter)
 
 db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+
+# Enhanced SocketIO configuration with better error handling
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    logger=True,
+    engineio_logger=True,
+    # Enhanced configuration for socket stability
+    ping_timeout=60,
+    ping_interval=25,
+    max_http_buffer_size=1000000,
+    allow_upgrades=True,
+    transports=['websocket', 'polling']
+)
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
@@ -257,8 +287,8 @@ def add_currency():
     db.session.add(currency)
     db.session.commit()
     
-    # Emit real-time update to all connected clients
-    socketio.emit('currency_added', {
+    # Emit real-time update to all connected clients with error handling
+    safe_emit('currency_added', {
         'id': currency.id,
         'name': currency.name,
         'symbol': currency.symbol,
@@ -326,8 +356,8 @@ def update_currency(currency_id):
     
     db.session.commit()
     
-    # Emit real-time update to all connected clients
-    socketio.emit('currency_updated', {
+    # Emit real-time update to all connected clients with error handling
+    safe_emit('currency_updated', {
         'id': currency.id,
         'name': currency.name,
         'symbol': currency.symbol,
@@ -361,8 +391,8 @@ def delete_currency(currency_id):
     db.session.delete(currency)
     db.session.commit()
     
-    # Emit real-time update to all connected clients
-    socketio.emit('currency_deleted', currency_data)
+    # Emit real-time update to all connected clients with error handling
+    safe_emit('currency_deleted', currency_data)
     
     flash(f'Currency {symbol} deleted successfully', 'success')
     return redirect(url_for('dashboard'))
@@ -433,18 +463,83 @@ def init_db_and_migrations():
     from migrations import run_migrations
     run_migrations()
 
-# SocketIO error handlers
+# Enhanced SocketIO error handlers with socket error recovery
 @socketio.on_error_default
 def default_error_handler(e):
-    app.logger.error(f'SocketIO error: {e}')
+    """Enhanced default error handler for SocketIO"""
+    error_msg = str(e)
+    
+    # Handle specific socket errors gracefully
+    if 'Bad file descriptor' in error_msg:
+        app.logger.warning(f'Socket descriptor error handled gracefully: {error_msg}')
+        # Don't propagate the error, just log it
+        return False
+    elif 'Connection reset by peer' in error_msg:
+        app.logger.warning(f'Client connection reset: {error_msg}')
+        return False
+    elif 'Broken pipe' in error_msg:
+        app.logger.warning(f'Broken pipe handled: {error_msg}')
+        return False
+    else:
+        app.logger.error(f'SocketIO error: {error_msg}')
+        return True
 
 @socketio.on('connect')
 def on_connect():
-    app.logger.info(f'Client connected: {request.sid}')
+    """Enhanced connect handler with error recovery"""
+    try:
+        app.logger.info(f'Client connected: {request.sid}')
+        # Send a welcome message to confirm connection
+        emit('connection_confirmed', {'status': 'connected', 'sid': request.sid})
+    except Exception as e:
+        app.logger.warning(f'Error in connect handler: {e}')
 
 @socketio.on('disconnect')
 def on_disconnect():
-    app.logger.info(f'Client disconnected: {request.sid}')
+    """Enhanced disconnect handler with graceful cleanup"""
+    try:
+        app.logger.info(f'Client disconnected: {request.sid}')
+    except Exception as e:
+        app.logger.warning(f'Error in disconnect handler: {e}')
+
+@socketio.on_error()
+def error_handler(e):
+    """Namespace-specific error handler"""
+    app.logger.warning(f'SocketIO namespace error: {e}')
+
+# Enhanced socket error recovery functions
+def handle_socket_error(func):
+    """Decorator to handle socket errors in SocketIO emissions"""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (OSError, socket.error) as e:
+            if e.errno == errno.EBADF:  # Bad file descriptor
+                app.logger.warning(f'Bad file descriptor in {func.__name__}, skipping emission')
+                return None
+            elif e.errno == errno.EPIPE:  # Broken pipe
+                app.logger.warning(f'Broken pipe in {func.__name__}, skipping emission')
+                return None
+            elif e.errno == errno.ECONNRESET:  # Connection reset
+                app.logger.warning(f'Connection reset in {func.__name__}, skipping emission')
+                return None
+            else:
+                app.logger.error(f'Socket error in {func.__name__}: {e}')
+                raise
+        except Exception as e:
+            app.logger.error(f'Unexpected error in {func.__name__}: {e}')
+            raise
+    return wrapper
+
+# Enhanced emission functions with error handling
+@handle_socket_error
+def safe_emit(event, data, **kwargs):
+    """Safely emit SocketIO events with error handling"""
+    try:
+        socketio.emit(event, data, **kwargs)
+        app.logger.debug(f'Successfully emitted {event}')
+    except Exception as e:
+        app.logger.warning(f'Failed to emit {event}: {e}')
 
 if __name__ == '__main__':
     try:
