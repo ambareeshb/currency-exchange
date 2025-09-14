@@ -13,8 +13,13 @@ def run_migrations():
     print(f"Admin Password: {'Set' if os.environ.get('ADMIN_PASSWORD') else 'Not set'}")
     
     with app.app_context():
-        print("Creating database tables...")
+        print("Running database migrations...")
+        
+        # Migration 001: Update password_hash column length
+        migration_001_update_password_hash_length()
+        
         # Create all tables
+        print("Creating database tables...")
         db.create_all()
         
         # Check what tables were created
@@ -24,14 +29,26 @@ def run_migrations():
         except Exception as e:
             print(f"Could not list tables: {e}")
         
-        # Migration 001: Create admin user
-        print("Running migration 001: Create admin user...")
-        migration_001_create_admin_user()
+        # Migration 002: Create admin user
+        print("Running migration 002: Create admin user...")
+        migration_002_create_admin_user()
         
         print("All migrations completed successfully")
 
-def migration_001_create_admin_user():
-    """Migration 001: Create admin user from environment variables"""
+def migration_001_update_password_hash_length():
+    """Migration 001: Update password_hash column to support longer hashes"""
+    from app import db
+    
+    try:
+        # Check if admin_users table exists and update password_hash column
+        db.engine.execute("ALTER TABLE admin_users ALTER COLUMN password_hash TYPE VARCHAR(255);")
+        print("Updated password_hash column length to 255 characters")
+    except Exception as e:
+        # Table might not exist yet, which is fine
+        print(f"Password hash column update skipped: {e}")
+
+def migration_002_create_admin_user():
+    """Migration 002: Create admin user from environment variables"""
     from app import AdminUser, db
     
     admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
