@@ -23,6 +23,10 @@ def run_migrations():
         print("Running migration 003: Add currency notes and rate range fields...")
         migration_003_add_currency_fields()
         
+        # Migration 004: Remove old rate_to_aed column
+        print("Running migration 004: Remove old rate_to_aed column...")
+        migration_004_remove_old_rate_column()
+        
         # Create all tables
         print("Creating database tables...")
         db.create_all()
@@ -178,6 +182,67 @@ def migration_003_add_currency_fields():
     except Exception as e:
         print(f"Currency table migration failed: {e}")
         print("New columns will be created when table is created")
+
+def migration_004_remove_old_rate_column():
+    """Migration 004: Remove old rate_to_aed column that conflicts with new schema"""
+    from app import db
+    
+    try:
+        # Check if currency table exists and if old column needs to be removed
+        inspector = db.inspect(db.engine)
+        if 'currency' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('currency')]
+            
+            if 'rate_to_aed' in columns:
+                print("Found old rate_to_aed column, removing it...")
+                
+                if db.engine.dialect.name == 'postgresql':
+                    with db.engine.connect() as connection:
+                        connection.execute(text("ALTER TABLE currency DROP COLUMN IF EXISTS rate_to_aed;"))
+                        connection.commit()
+                        print("✅ Removed old rate_to_aed column (PostgreSQL)")
+                        
+                elif db.engine.dialect.name == 'sqlite':
+                    # SQLite doesn't support DROP COLUMN easily, so we need to recreate the table
+                    print("SQLite detected - recreating table without old column...")
+                    with db.engine.connect() as connection:
+                        # Create new table with correct schema
+                        connection.execute(text("""
+                            CREATE TABLE currency_new (
+                                id INTEGER PRIMARY KEY,
+                                name VARCHAR(100) NOT NULL,
+                                symbol VARCHAR(10) NOT NULL UNIQUE,
+                                min_buying_rate_to_aed REAL,
+                                max_buying_rate_to_aed REAL,
+                                min_selling_rate_to_aed REAL,
+                                max_selling_rate_to_aed REAL,
+                                admin_notes TEXT
+                            );
+                        """))
+                        
+                        # Copy data from old table to new table
+                        connection.execute(text("""
+                            INSERT INTO currency_new (id, name, symbol, min_buying_rate_to_aed, max_buying_rate_to_aed, min_selling_rate_to_aed, max_selling_rate_to_aed, admin_notes)
+                            SELECT id, name, symbol, min_buying_rate_to_aed, max_buying_rate_to_aed, min_selling_rate_to_aed, max_selling_rate_to_aed, admin_notes
+                            FROM currency;
+                        """))
+                        
+                        # Drop old table and rename new table
+                        connection.execute(text("DROP TABLE currency;"))
+                        connection.execute(text("ALTER TABLE currency_new RENAME TO currency;"))
+                        
+                        connection.commit()
+                        print("✅ Recreated currency table without old rate_to_aed column (SQLite)")
+                else:
+                    print(f"Unknown database dialect: {db.engine.dialect.name}")
+            else:
+                print("Old rate_to_aed column not found, no action needed")
+        else:
+            print("Currency table doesn't exist yet")
+            
+    except Exception as e:
+        print(f"Migration 004 failed: {e}")
+        print("This may be expected if the old column doesn't exist")
 
 def load_sample_data():
     """Load sample currency data for development"""
