@@ -496,10 +496,19 @@ else
     # Pull latest changes
     git_operation "pull"
 
+    # Check if virtual environment exists, create if not
+    if [ ! -d "venv" ]; then
+        print_status "Virtual environment not found, creating..."
+        detect_python_version
+        $PYTHON_CMD -m venv venv
+        print_status "✅ Virtual environment created"
+    fi
+
     print_status "Activating virtual environment..."
     source venv/bin/activate
 
     print_status "Updating dependencies..."
+    pip install --upgrade pip
     pip install -r requirements.txt
 fi
 
