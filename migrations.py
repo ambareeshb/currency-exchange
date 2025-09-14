@@ -121,17 +121,36 @@ def load_sample_data():
 
 if __name__ == '__main__':
     # Load environment variables from production file
-    from dotenv import load_dotenv
     import os
     
     # Try to load from .env.production first, then fallback to .env.aws
     if os.path.exists('.env.production'):
-        load_dotenv('.env.production')
-        print("Loaded environment from .env.production")
+        try:
+            from dotenv import load_dotenv
+            load_dotenv('.env.production')
+            print("Loaded environment from .env.production")
+        except Exception as e:
+            print(f"Warning: Could not load .env.production using dotenv: {e}")
+            print("Attempting manual environment loading...")
+            # Manual loading as fallback
+            try:
+                with open('.env.production', 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            # Remove quotes if present
+                            value = value.strip('"\'')
+                            os.environ[key] = value
+                print("Successfully loaded environment variables manually")
+            except Exception as manual_error:
+                print(f"Manual loading also failed: {manual_error}")
     elif os.path.exists('.env.aws'):
+        from dotenv import load_dotenv
         load_dotenv('.env.aws')
         print("Loaded environment from .env.aws")
     else:
+        from dotenv import load_dotenv
         load_dotenv()
         print("Loaded environment from default .env")
     
