@@ -8,11 +8,24 @@ def run_migrations():
     """Run all database migrations"""
     from app import app, db, AdminUser
     
+    print(f"Database URL: {os.environ.get('DATABASE_URL', 'Not set')}")
+    print(f"Admin Username: {os.environ.get('ADMIN_USERNAME', 'Not set')}")
+    print(f"Admin Password: {'Set' if os.environ.get('ADMIN_PASSWORD') else 'Not set'}")
+    
     with app.app_context():
+        print("Creating database tables...")
         # Create all tables
         db.create_all()
         
+        # Check what tables were created
+        try:
+            tables = db.engine.table_names()
+            print(f"Tables created: {tables}")
+        except Exception as e:
+            print(f"Could not list tables: {e}")
+        
         # Migration 001: Create admin user
+        print("Running migration 001: Create admin user...")
         migration_001_create_admin_user()
         
         print("All migrations completed successfully")

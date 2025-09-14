@@ -212,7 +212,30 @@ fi
 print_status "Running database migrations..."
 cd $APP_DIR
 source venv/bin/activate
+
+# Load environment variables for migrations
+print_status "Loading environment variables..."
+export $(cat .env.production | grep -v '^#' | xargs)
+
+# Run migrations with environment loaded
+print_status "Executing migrations..."
 python migrations.py
+
+# Verify migration results
+print_status "Verifying database setup..."
+python -c "
+from app import app, db, AdminUser, Currency
+with app.app_context():
+    print('Tables created:', db.engine.table_names())
+    admin_count = AdminUser.query.count()
+    currency_count = Currency.query.count()
+    print(f'Admin users: {admin_count}')
+    print(f'Currencies: {currency_count}')
+    if admin_count == 0:
+        print('WARNING: No admin user found!')
+    else:
+        print('✅ Admin user exists')
+"
 
 print_status "Starting/restarting services..."
 sudo systemctl start $SERVICE_NAME

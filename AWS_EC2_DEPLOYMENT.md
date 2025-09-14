@@ -123,6 +123,49 @@ sudo systemctl restart currency-exchange nginx
 
 ---
 
+## How Files Get to `/opt/currency-exchange`
+
+The aws-deploy.sh script automatically sets up the file structure. Here's exactly what happens:
+
+### **Step-by-Step Process:**
+
+1. **Directory Creation** (aws-deploy.sh lines 45-47):
+```bash
+# Script creates the directory
+sudo mkdir -p /opt/currency-exchange
+sudo chown ec2-user:ec2-user /opt/currency-exchange
+```
+
+2. **Repository Cloning** (aws-deploy.sh lines 54-59):
+```bash
+# Script prompts for your GitHub URL, then:
+cd /opt/currency-exchange
+git clone $REPO_URL .  # The "." clones directly into current directory
+```
+
+3. **Why `/opt/currency-exchange`?**
+   - `/opt/` is the standard Linux directory for optional/third-party software
+   - It's separate from system files and user home directories
+   - Provides consistent location regardless of which user runs the service
+   - Standard practice for web applications in production
+
+### **What the Script Does:**
+```bash
+# From aws-deploy.sh (initial setup section):
+print_status "Creating application directory..."
+sudo mkdir -p $APP_DIR                    # APP_DIR="/opt/currency-exchange"
+sudo chown ec2-user:ec2-user $APP_DIR
+
+print_status "Cloning repository..."
+cd $APP_DIR
+git clone $REPO_URL .                     # Downloads YOUR GitHub repo here
+```
+
+### **Alternative Locations (Why NOT used):**
+- `~/currency-exchange` - User home directory (not standard for services)
+- `/var/www/currency-exchange` - Web server directory (we use Nginx proxy)
+- `/home/ec2-user/app` - User directory (services should be system-wide)
+
 ## File Locations on EC2 Instance
 
 After deployment, your files are located in `/opt/currency-exchange`:
