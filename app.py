@@ -73,9 +73,11 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_timeout': 20,     # Timeout for getting connection from pool
     'max_overflow': 0,      # Don't allow overflow connections
     'echo': False,          # Set to True for SQL debugging
-    # Critical threading fixes
+    # Critical threading fixes for connection pool
     'pool_reset_on_return': 'commit',  # Reset connections on return
-    'pool_size': 5,         # Limit pool size to prevent contention
+    'pool_size': 1,         # Use single connection to avoid threading issues
+    # Use NullPool to avoid threading issues with connection pooling
+    'poolclass': None,      # This will use NullPool which creates new connections each time
     # Threading-safe connection handling
     'connect_args': {
         'check_same_thread': False,  # For SQLite threading safety
@@ -114,7 +116,8 @@ def close_db_session(error):
 def check_db_connection():
     """Check if database connection is healthy"""
     try:
-        db.session.execute('SELECT 1')
+        from sqlalchemy import text
+        db.session.execute(text('SELECT 1'))
         return True
     except Exception as e:
         app.logger.error(f"Database connection check failed: {e}")
@@ -138,7 +141,8 @@ def recover_db_pool():
         
         # Test new connection
         with db.engine.connect() as conn:
-            conn.execute('SELECT 1')
+            from sqlalchemy import text
+            conn.execute(text('SELECT 1'))
         
         app.logger.info("Database connection pool recovered successfully")
         return True
@@ -647,7 +651,8 @@ def health_check():
         start_time = time.time()
         
         # Basic connection test
-        db.session.execute('SELECT 1')
+        from sqlalchemy import text
+        db.session.execute(text('SELECT 1'))
         connection_time = time.time() - start_time
         health_status['checks']['database_connection'] = {
             'status': 'ok',
@@ -743,10 +748,10 @@ def on_connect():
         app.logger.warning(f'Error in connect handler: {e}')
 
 @socketio.on('disconnect')
-def on_disconnect():
+def on_disconnect(reason):
     """Enhanced disconnect handler with graceful cleanup"""
     try:
-        app.logger.info(f'Client disconnected: {request.sid}')
+        app.logger.info(f'Client disconnected: {request.sid}, reason: {reason}')
     except Exception as e:
         app.logger.warning(f'Error in disconnect handler: {e}')
 
