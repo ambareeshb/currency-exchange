@@ -66,11 +66,47 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-i
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Enhanced SQLAlchemy configuration to prevent threading issues
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,  # Verify connections before use
+    'pool_recycle': 300,    # Recycle connections every 5 minutes
+    'pool_timeout': 20,     # Timeout for getting connection from pool
+    'max_overflow': 0,      # Don't allow overflow connections
+    'echo': False,          # Set to True for SQL debugging
+    # Threading-safe connection handling
+    'connect_args': {
+        'check_same_thread': False  # For SQLite threading safety
+    } if 'sqlite' in os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db') else {}
+}
+
 # Configure Flask logging with socket error handling
 app.logger.setLevel(logging.INFO)
 app.logger.addFilter(socket_filter)
 
 db = SQLAlchemy(app)
+
+# Enhanced database session handling for threading safety
+@app.teardown_appcontext
+def close_db_session(error):
+    """Ensure database sessions are properly closed after each request"""
+    try:
+        db.session.remove()
+    except Exception as e:
+        app.logger.warning(f"Error closing database session: {e}")
+
+# Database connection health check
+def check_db_connection():
+    """Check if database connection is healthy"""
+    try:
+        db.session.execute('SELECT 1')
+        return True
+    except Exception as e:
+        app.logger.error(f"Database connection check failed: {e}")
+        try:
+            db.session.rollback()
+        except:
+            pass
+        return False
 
 # Enhanced SocketIO configuration with better error handling
 socketio = SocketIO(
@@ -106,7 +142,14 @@ def internal_error(error):
     }
     app.logger.error(f'Internal Server Error (500): {error_details}')
     print(f"INTERNAL SERVER ERROR: {error_details}")  # Ensure it's visible in console
-    db.session.rollback()
+    
+    # Enhanced database session cleanup
+    try:
+        db.session.rollback()
+        db.session.remove()
+    except Exception as cleanup_error:
+        app.logger.error(f'Error during database cleanup: {cleanup_error}')
+    
     return render_template('base.html'), 500
 
 @app.errorhandler(404)
@@ -133,7 +176,14 @@ def handle_exception(e):
     }
     app.logger.error(f'Unhandled Exception: {error_details}')
     print(f"UNHANDLED EXCEPTION: {error_details}")  # Ensure it's visible in console
-    db.session.rollback()
+    
+    # Enhanced database session cleanup for threading issues
+    try:
+        db.session.rollback()
+        db.session.remove()
+    except Exception as cleanup_error:
+        app.logger.error(f'Error during database cleanup: {cleanup_error}')
+    
     return render_template('base.html'), 500
 
 # Signal handlers for graceful shutdown
@@ -412,7 +462,13 @@ def update_currency(currency_id):
         flash('Buying rates must be lower than selling rates', 'error')
         return redirect(url_for('dashboard'))
     
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        db.session.remove()
+        app.logger.error(f'Database error updating currency: {e}')
+        raise
     
     # Emit real-time update to all connected clients with error handling
     safe_emit('currency_updated', {
@@ -446,8 +502,14 @@ def delete_currency(currency_id):
         'symbol': currency.symbol
     }
     
-    db.session.delete(currency)
-    db.session.commit()
+    try:
+        db.session.delete(currency)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        db.session.remove()
+        app.logger.error(f'Database error deleting currency: {e}')
+        raise
     
     # Emit real-time update to all connected clients with error handling
     safe_emit('currency_deleted', currency_data)
@@ -493,28 +555,80 @@ def admin_redirect():
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint for monitoring"""
+    """Enhanced health check endpoint for monitoring"""
+    health_status = {
+        'status': 'healthy',
+        'timestamp': None,
+        'database': 'unknown',
+        'currencies': 0,
+        'version': '1.0.0',
+        'checks': {}
+    }
+    
     try:
-        # Test database connection
+        # Test database connection with timeout
+        import time
+        start_time = time.time()
+        
+        # Basic connection test
         db.session.execute('SELECT 1')
+        connection_time = time.time() - start_time
+        health_status['checks']['database_connection'] = {
+            'status': 'ok',
+            'response_time_ms': round(connection_time * 1000, 2)
+        }
         
-        # Test basic app functionality
-        currency_count = Currency.query.count()
+        # Test database queries
+        try:
+            currency_count = Currency.query.count()
+            health_status['currencies'] = currency_count
+            health_status['checks']['database_queries'] = {'status': 'ok'}
+        except Exception as query_error:
+            health_status['checks']['database_queries'] = {
+                'status': 'error',
+                'error': str(query_error)
+            }
+            raise query_error
         
-        return {
-            'status': 'healthy',
-            'timestamp': db.func.current_timestamp(),
-            'database': 'connected',
-            'currencies': currency_count,
-            'version': '1.0.0'
-        }, 200
+        # Test database session health
+        try:
+            db.session.commit()
+            health_status['checks']['database_session'] = {'status': 'ok'}
+        except Exception as session_error:
+            health_status['checks']['database_session'] = {
+                'status': 'error',
+                'error': str(session_error)
+            }
+            # Try to recover the session
+            try:
+                db.session.rollback()
+                db.session.remove()
+            except:
+                pass
+            raise session_error
+        
+        health_status['database'] = 'connected'
+        health_status['timestamp'] = time.time()
+        
+        return health_status, 200
+        
     except Exception as e:
         app.logger.error(f'Health check failed: {e}')
-        return {
+        health_status.update({
             'status': 'unhealthy',
             'error': str(e),
-            'timestamp': db.func.current_timestamp()
-        }, 503
+            'error_type': type(e).__name__,
+            'timestamp': time.time()
+        })
+        
+        # Attempt database cleanup
+        try:
+            db.session.rollback()
+            db.session.remove()
+        except Exception as cleanup_error:
+            health_status['cleanup_error'] = str(cleanup_error)
+        
+        return health_status, 503
 
 def init_db_and_migrations():
     """Initialize database and run migrations"""
