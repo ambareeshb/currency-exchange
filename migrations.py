@@ -101,9 +101,20 @@ def load_sample_data():
         print("Sample currency data loaded")
 
 if __name__ == '__main__':
-    # Load environment variables
+    # Load environment variables from production file
     from dotenv import load_dotenv
-    load_dotenv()
+    import os
+    
+    # Try to load from .env.production first, then fallback to .env.aws
+    if os.path.exists('.env.production'):
+        load_dotenv('.env.production')
+        print("Loaded environment from .env.production")
+    elif os.path.exists('.env.aws'):
+        load_dotenv('.env.aws')
+        print("Loaded environment from .env.aws")
+    else:
+        load_dotenv()
+        print("Loaded environment from default .env")
     
     run_migrations()
     
