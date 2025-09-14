@@ -52,14 +52,16 @@ db = SQLAlchemy(app)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    logger=True,
-    engineio_logger=True,
+    logger=False,  # Reduce logging noise
+    engineio_logger=False,  # Reduce logging noise
     # Enhanced configuration for socket stability
-    ping_timeout=60,
-    ping_interval=25,
+    ping_timeout=30,  # Reduced timeout
+    ping_interval=10,  # More frequent pings
     max_http_buffer_size=1000000,
     allow_upgrades=True,
-    transports=['websocket', 'polling']
+    transports=['polling', 'websocket'],  # Prefer polling first
+    # Additional stability settings
+    manage_session=False  # Let Flask-Login handle sessions
 )
 
 login_manager = LoginManager()

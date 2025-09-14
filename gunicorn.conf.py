@@ -15,13 +15,13 @@ backlog = 2048
 # Worker processes - optimized for socket stability
 workers = 1  # SocketIO requires single worker with eventlet
 worker_class = "eventlet"
-worker_connections = 500  # Reduced to prevent overload
-timeout = 60  # Reduced timeout for faster error detection
-keepalive = 2  # Shorter keepalive to prevent stale connections
+worker_connections = 1000  # Increased for better handling
+timeout = 120  # Increased timeout for WebSocket connections
+keepalive = 5  # Longer keepalive for WebSocket stability
 
 # Enhanced restart settings for socket error recovery
-max_requests = 500  # More frequent worker restarts
-max_requests_jitter = 50
+max_requests = 1000  # Less frequent worker restarts for WebSocket stability
+max_requests_jitter = 100
 preload_app = True
 
 # Logging with enhanced error tracking and fallback
@@ -197,7 +197,7 @@ raw_env = [
 ]
 
 # Enhanced graceful timeout for worker shutdown
-graceful_timeout = 15  # Shorter timeout for faster recovery
+graceful_timeout = 30  # Longer timeout for WebSocket connections
 
 # Enable SO_REUSEPORT for better performance and error recovery
 reuse_port = True
