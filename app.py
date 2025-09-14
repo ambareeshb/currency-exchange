@@ -23,15 +23,39 @@ class SocketErrorFilter(logging.Filter):
             record.msg = f"[SOCKET_ERROR_HANDLED] {record.msg}"
         return True
 
-# Configure enhanced logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s %(levelname)s %(name)s %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('/var/log/currency-exchange/app.log') if os.path.exists('/var/log/currency-exchange') else logging.StreamHandler(sys.stdout)
-    ]
-)
+# Configure enhanced logging with proper fallback
+def setup_logging():
+    """Setup logging with proper file and console handlers"""
+    log_format = '%(asctime)s %(levelname)s %(name)s %(message)s'
+    
+    # Always add console handler
+    handlers = [logging.StreamHandler(sys.stdout)]
+    
+    # Try to add file handler if directory exists
+    log_dir = '/var/log/currency-exchange'
+    if os.path.exists(log_dir):
+        try:
+            handlers.append(logging.FileHandler(os.path.join(log_dir, 'app.log')))
+            print(f"Logging to file: {os.path.join(log_dir, 'app.log')}")
+        except (OSError, PermissionError) as e:
+            print(f"Could not create log file: {e}")
+    else:
+        # Create local log file as fallback
+        try:
+            handlers.append(logging.FileHandler('app.log'))
+            print("Logging to local file: app.log")
+        except (OSError, PermissionError) as e:
+            print(f"Could not create local log file: {e}")
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format=log_format,
+        handlers=handlers,
+        force=True  # Override any existing configuration
+    )
+
+# Setup logging
+setup_logging()
 
 # Add socket error filter to all loggers
 socket_filter = SocketErrorFilter()
@@ -68,17 +92,49 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Error handlers
+# Enhanced Error handlers with detailed logging
 @app.errorhandler(500)
 def internal_error(error):
-    app.logger.error(f'Server Error: {error}')
+    import traceback
+    error_details = {
+        'error': str(error),
+        'url': request.url,
+        'method': request.method,
+        'remote_addr': request.remote_addr,
+        'user_agent': request.headers.get('User-Agent', 'Unknown'),
+        'traceback': traceback.format_exc()
+    }
+    app.logger.error(f'Internal Server Error (500): {error_details}')
+    print(f"INTERNAL SERVER ERROR: {error_details}")  # Ensure it's visible in console
     db.session.rollback()
     return render_template('base.html'), 500
 
 @app.errorhandler(404)
 def not_found_error(error):
-    app.logger.warning(f'Page not found: {request.url}')
+    error_details = {
+        'url': request.url,
+        'method': request.method,
+        'remote_addr': request.remote_addr,
+        'user_agent': request.headers.get('User-Agent', 'Unknown')
+    }
+    app.logger.warning(f'Page not found (404): {error_details}')
     return render_template('base.html'), 404
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    error_details = {
+        'error': str(e),
+        'type': type(e).__name__,
+        'url': request.url,
+        'method': request.method,
+        'remote_addr': request.remote_addr,
+        'traceback': traceback.format_exc()
+    }
+    app.logger.error(f'Unhandled Exception: {error_details}')
+    print(f"UNHANDLED EXCEPTION: {error_details}")  # Ensure it's visible in console
+    db.session.rollback()
+    return render_template('base.html'), 500
 
 # Signal handlers for graceful shutdown
 def signal_handler(sig, frame):
@@ -545,15 +601,36 @@ def safe_emit(event, data, **kwargs):
 
 if __name__ == '__main__':
     try:
+        print("=" * 50)
+        print("STARTING CURRENCY EXCHANGE APPLICATION")
+        print("=" * 50)
+        
         # Initialize database and run migrations
+        print("Initializing database and running migrations...")
         init_db_and_migrations()
+        print("Database initialization completed.")
         
         # Get configuration from environment
         port = int(os.environ.get('PORT', 5001))
         debug = os.environ.get('DEBUG', 'false').lower() == 'true'
         
-        app.logger.info(f'Starting Currency Exchange app on port {port}')
+        startup_info = {
+            'port': port,
+            'debug': debug,
+            'host': '0.0.0.0',
+            'python_version': sys.version,
+            'working_directory': os.getcwd()
+        }
+        
+        app.logger.info(f'Starting Currency Exchange app with config: {startup_info}')
+        print(f"Starting server on port {port} (debug={debug})")
+        print("Application startup completed successfully!")
+        print("=" * 50)
+        
         socketio.run(app, debug=debug, port=port, host='0.0.0.0')
     except Exception as e:
-        app.logger.error(f'Failed to start application: {e}')
+        import traceback
+        error_msg = f'Failed to start application: {e}\nTraceback: {traceback.format_exc()}'
+        app.logger.error(error_msg)
+        print(f"STARTUP ERROR: {error_msg}")
         sys.exit(1)
