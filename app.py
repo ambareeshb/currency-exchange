@@ -67,26 +67,36 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:/
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Enhanced SQLAlchemy configuration to prevent threading issues
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,  # Verify connections before use
-    'pool_recycle': 300,    # Recycle connections every 5 minutes
-    'pool_timeout': 20,     # Timeout for getting connection from pool
-    'max_overflow': 0,      # Don't allow overflow connections
-    'echo': False,          # Set to True for SQL debugging
-    # Critical threading fixes for connection pool
-    'pool_reset_on_return': 'commit',  # Reset connections on return
-    'pool_size': 1,         # Use single connection to avoid threading issues
-    # Use NullPool to avoid threading issues with connection pooling
-    'poolclass': None,      # This will use NullPool which creates new connections each time
-    # Threading-safe connection handling
-    'connect_args': {
-        'check_same_thread': False,  # For SQLite threading safety
-        'timeout': 20  # Database timeout
-    } if 'sqlite' in os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db') else {
-        'connect_timeout': 20
-        # Note: pool_timeout is a SQLAlchemy parameter, not a psycopg2 connection parameter
+from sqlalchemy.pool import NullPool, StaticPool
+
+# Determine if we're using SQLite
+database_url = os.environ.get('DATABASE_URL', 'sqlite:///currency_exchange.db')
+is_sqlite = 'sqlite' in database_url
+
+if is_sqlite:
+    # For SQLite: Use StaticPool with proper threading configuration
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'poolclass': StaticPool,
+        'pool_pre_ping': True,
+        'pool_recycle': -1,  # Don't recycle connections for SQLite
+        'connect_args': {
+            'check_same_thread': False,  # Allow SQLite to be used across threads
+            'timeout': 30,  # Increase timeout for SQLite
+            'isolation_level': None,  # Use autocommit mode
+        },
+        'echo': False
     }
-}
+else:
+    # For PostgreSQL: Use NullPool to avoid connection pool threading issues
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'poolclass': NullPool,  # Create new connection for each request
+        'pool_pre_ping': True,
+        'connect_args': {
+            'connect_timeout': 30,
+            'application_name': f'currency_exchange_port_{os.environ.get("PORT", "5001")}'
+        },
+        'echo': False
+    }
 
 # Configure Flask logging with socket error handling
 app.logger.setLevel(logging.INFO)
@@ -99,18 +109,28 @@ db = SQLAlchemy(app)
 def close_db_session(error):
     """Ensure database sessions are properly closed after each request"""
     try:
-        # Force rollback any pending transactions
-        if db.session.is_active:
-            db.session.rollback()
-        # Remove the session from the registry
+        # Check if session exists and is active
+        if hasattr(db.session, 'is_active') and db.session.is_active:
+            if error:
+                db.session.rollback()
+            else:
+                try:
+                    db.session.commit()
+                except Exception as commit_error:
+                    app.logger.warning(f"Error committing session: {commit_error}")
+                    db.session.rollback()
+        
+        # Always remove the session from the registry
         db.session.remove()
+        
     except Exception as e:
         app.logger.warning(f"Error closing database session: {e}")
         # Force cleanup even if there's an error
         try:
-            db.session.close()
-        except:
-            pass
+            db.session.rollback()
+            db.session.remove()
+        except Exception as cleanup_error:
+            app.logger.warning(f"Error in session cleanup: {cleanup_error}")
 
 # Database connection health check
 def check_db_connection():
@@ -133,40 +153,90 @@ def recover_db_pool():
     try:
         app.logger.info("Attempting to recover database connection pool...")
         
-        # Force close all connections in the pool
+        # Force dispose of all connections in the pool
         db.engine.dispose()
         
-        # Clear any pending sessions
+        # Clear any pending sessions from all threads
         db.session.remove()
         
-        # Test new connection
+        # For SQLite with StaticPool, we need to recreate the engine
+        if is_sqlite:
+            # Recreate the engine with fresh configuration
+            from sqlalchemy import create_engine
+            new_engine = create_engine(
+                database_url,
+                poolclass=StaticPool,
+                pool_pre_ping=True,
+                pool_recycle=-1,
+                connect_args={
+                    'check_same_thread': False,
+                    'timeout': 30,
+                    'isolation_level': None,
+                },
+                echo=False
+            )
+            db.engine = new_engine
+            
+        # Test new connection with timeout
+        import time
+        start_time = time.time()
         with db.engine.connect() as conn:
             from sqlalchemy import text
             conn.execute(text('SELECT 1'))
         
-        app.logger.info("Database connection pool recovered successfully")
+        recovery_time = time.time() - start_time
+        app.logger.info(f"Database connection pool recovered successfully in {recovery_time:.2f}s")
         return True
+        
     except Exception as e:
         app.logger.error(f"Failed to recover database pool: {e}")
         return False
 
-# Enhanced database operation wrapper
+# Enhanced database operation wrapper with better error handling
 def safe_db_operation(operation_func, *args, **kwargs):
     """Safely execute database operations with automatic recovery"""
     max_retries = 3
+    
     for attempt in range(max_retries):
         try:
+            # Use a fresh session for each attempt
+            if attempt > 0:
+                db.session.remove()
+                
             return operation_func(*args, **kwargs)
+            
         except Exception as e:
             error_msg = str(e).lower()
-            if 'cannot notify on un-acquired lock' in error_msg or 'bad file descriptor' in error_msg:
-                app.logger.warning(f"Database threading issue detected (attempt {attempt + 1}): {e}")
+            
+            # Check for threading/lock related errors
+            if any(phrase in error_msg for phrase in [
+                'cannot notify on un-acquired lock',
+                'cannot wait on un-acquired lock',
+                'bad file descriptor',
+                'database is locked',
+                'connection pool limit'
+            ]):
+                app.logger.warning(f"Database threading issue detected (attempt {attempt + 1}/{max_retries}): {e}")
+                
+                # Clean up current session
+                try:
+                    db.session.rollback()
+                    db.session.remove()
+                except:
+                    pass
+                
                 if attempt < max_retries - 1:
-                    # Try to recover the pool
+                    # Try to recover the pool and wait a bit
                     recover_db_pool()
+                    import time
+                    time.sleep(0.1 * (attempt + 1))  # Progressive backoff
                     continue
+                    
+            # For non-threading errors, don't retry
+            app.logger.error(f"Database operation failed: {e}")
             raise e
-    raise Exception(f"Failed after {max_retries} attempts")
+            
+    raise Exception(f"Database operation failed after {max_retries} attempts")
 
 # Enhanced SocketIO configuration with better error handling
 socketio = SocketIO(
@@ -203,14 +273,23 @@ def internal_error(error):
     app.logger.error(f'Internal Server Error (500): {error_details}')
     print(f"INTERNAL SERVER ERROR: {error_details}")  # Ensure it's visible in console
     
-    # Enhanced database session cleanup
+    # Enhanced database session cleanup with threading safety
     try:
-        db.session.rollback()
+        if hasattr(db.session, 'is_active'):
+            db.session.rollback()
         db.session.remove()
+        
+        # If it's a threading/lock error, try to recover the pool
+        error_str = str(error).lower()
+        if 'cannot wait on un-acquired lock' in error_str or 'cannot notify on un-acquired lock' in error_str:
+            app.logger.warning("Threading lock error detected, attempting pool recovery")
+            recover_db_pool()
+            
     except Exception as cleanup_error:
         app.logger.error(f'Error during database cleanup: {cleanup_error}')
     
-    return render_template('base.html'), 500
+    # Use a simple response to avoid template rendering issues
+    return '<h1>Internal Server Error</h1><p>The server encountered an error and could not complete your request.</p>', 500
 
 @app.errorhandler(404)
 def not_found_error(error):
@@ -239,15 +318,25 @@ def handle_exception(e):
     
     # Enhanced database session cleanup for threading issues
     try:
-        db.session.rollback()
+        if hasattr(db.session, 'is_active'):
+            db.session.rollback()
         db.session.remove()
+        
+        # Check for threading/lock errors and attempt recovery
+        error_str = str(e).lower()
+        if any(phrase in error_str for phrase in [
+            'cannot notify on un-acquired lock',
+            'cannot wait on un-acquired lock',
+            'bad file descriptor'
+        ]):
+            app.logger.warning(f"Threading/lock error detected: {type(e).__name__}")
+            recover_db_pool()
+            
     except Exception as cleanup_error:
         app.logger.error(f'Error during database cleanup: {cleanup_error}')
-        # Try pool recovery if it's a threading issue
-        if 'cannot notify on un-acquired lock' in str(cleanup_error):
-            recover_db_pool()
     
-    return render_template('base.html'), 500
+    # Use a simple response to avoid template rendering issues during errors
+    return '<h1>Server Error</h1><p>An unexpected error occurred. Please try again later.</p>', 500
 
 # Signal handlers for graceful shutdown
 def signal_handler(sig, frame):
@@ -282,22 +371,24 @@ class User(UserMixin):
 @login_manager.user_loader
 def load_user(user_id):
     """Thread-safe user loader with proper session management"""
-    def _load_user():
-        admin_user = AdminUser.query.filter_by(username=user_id).first()
-        if admin_user:
-            return User(admin_user.username)
+    if not user_id:
         return None
     
     try:
-        return safe_db_operation(_load_user)
+        # Use a fresh session for user loading to avoid threading issues
+        with db.engine.connect() as conn:
+            from sqlalchemy import text
+            result = conn.execute(
+                text("SELECT username FROM admin_users WHERE username = :username"),
+                {"username": user_id}
+            )
+            row = result.fetchone()
+            if row:
+                return User(row[0])
+        return None
+        
     except Exception as e:
         app.logger.error(f"Error loading user {user_id}: {e}")
-        # Clean up the session on error
-        try:
-            db.session.rollback()
-            db.session.remove()
-        except:
-            pass
         return None
 
 class Currency(db.Model):
