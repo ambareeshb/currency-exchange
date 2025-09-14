@@ -9,7 +9,7 @@ def run_migrations():
     """Run all database migrations"""
     from app import app, db, AdminUser
     
-    print(f"Database URL: {os.environ.get('DATABASE_URL', 'Not set')}")
+    print(f"Database URL: {'Set' if os.environ.get('DATABASE_URL') else 'Not set'}")
     print(f"Admin Username: {os.environ.get('ADMIN_USERNAME', 'Not set')}")
     print(f"Admin Password: {'Set' if os.environ.get('ADMIN_PASSWORD') else 'Not set'}")
     
