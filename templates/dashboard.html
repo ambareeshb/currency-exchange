@@ -17,7 +17,7 @@
                 <h5><i class="fas fa-plus me-2"></i>Add New Currency</h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('add_currency') }}">
+                <form method="POST" action="{{ url_for('add_currency') }}" enctype="multipart/form-data" onsubmit="handleAddCurrencyForm(event)">
                     <div class="mb-3">
                         <label for="name" class="form-label">Currency Name</label>
                         <input type="text" class="form-control" id="name" name="name"
@@ -32,42 +32,48 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Buying Rate Range (Exchange buys currency from customer)</label>
+                        <div class="alert alert-info py-1 mb-2">
+                            <small style="font-size: 0.75rem;"><i class="fas fa-info-circle me-1"></i><strong>Rate Format:</strong> How many units of this currency = 1 AED</small>
+                        </div>
                         <div class="row">
                             <div class="col-6">
-                                <label for="min_buying_rate_to_aed" class="form-label text-success">Min Buying Rate</label>
+                                <label for="min_buying_rate_to_aed" class="form-label text-success" style="font-size: 0.85rem;">Min Buying Rate</label>
                                 <input type="number" class="form-control" id="min_buying_rate_to_aed" name="min_buying_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.65"
+                                       step="0.000001" placeholder="e.g., 0.27"
                                        value="{{ form_data.get('min_buying_rate_to_aed', '') }}">
-                                <small class="text-muted">Minimum rate when exchange buys</small>
+                                <small class="text-muted" style="font-size: 0.7rem;">Min rate when buying from customer</small>
                             </div>
                             <div class="col-6">
-                                <label for="max_buying_rate_to_aed" class="form-label text-success">Max Buying Rate</label>
+                                <label for="max_buying_rate_to_aed" class="form-label text-success" style="font-size: 0.85rem;">Max Buying Rate</label>
                                 <input type="number" class="form-control" id="max_buying_rate_to_aed" name="max_buying_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.67"
+                                       step="0.000001" placeholder="e.g., 0.28"
                                        value="{{ form_data.get('max_buying_rate_to_aed', '') }}">
-                                <small class="text-muted">Maximum rate when exchange buys</small>
+                                <small class="text-muted" style="font-size: 0.7rem;">Max rate when buying from customer</small>
                             </div>
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Selling Rate Range (Exchange sells currency to customer)</label>
+                        <div class="alert alert-warning py-1 mb-2">
+                            <small style="font-size: 0.75rem;"><i class="fas fa-info-circle me-1"></i><strong>Rate Format:</strong> How many AED = 1 unit of this currency</small>
+                        </div>
                         <div class="row">
                             <div class="col-6">
-                                <label for="min_selling_rate_to_aed" class="form-label text-danger">Min Selling Rate</label>
+                                <label for="min_selling_rate_to_aed" class="form-label text-danger" style="font-size: 0.85rem;">Min Selling Rate</label>
                                 <input type="number" class="form-control" id="min_selling_rate_to_aed" name="min_selling_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.68"
+                                       step="0.000001" placeholder="e.g., 3.67"
                                        value="{{ form_data.get('min_selling_rate_to_aed', '') }}">
-                                <small class="text-muted">Minimum rate when exchange sells</small>
+                                <small class="text-muted" style="font-size: 0.7rem;">Min AED per unit when selling</small>
                             </div>
                             <div class="col-6">
-                                <label for="max_selling_rate_to_aed" class="form-label text-danger">Max Selling Rate</label>
+                                <label for="max_selling_rate_to_aed" class="form-label text-danger" style="font-size: 0.85rem;">Max Selling Rate</label>
                                 <input type="number" class="form-control" id="max_selling_rate_to_aed" name="max_selling_rate_to_aed"
                                        step="0.000001" placeholder="e.g., 3.70"
                                        value="{{ form_data.get('max_selling_rate_to_aed', '') }}">
-                                <small class="text-muted">Maximum rate when exchange sells</small>
+                                <small class="text-muted" style="font-size: 0.7rem;">Max AED per unit when selling</small>
                             </div>
                         </div>
-                        <div class="form-text">Set rate ranges for exchange operations. Overlapping rates are allowed for flexible pricing.</div>
+                        <div class="form-text" style="font-size: 0.75rem;">Set rate ranges for exchange operations. Overlapping rates are allowed for flexible pricing.</div>
                     </div>
                     <div class="mb-3">
                         <label for="admin_notes" class="form-label">Admin Notes</label>
@@ -75,8 +81,65 @@
                                   placeholder="Add notes about this currency (visible to public via info button)">{{ form_data.get('admin_notes', '') }}</textarea>
                         <div class="form-text">These notes will be visible to users via the info button</div>
                     </div>
-                    <button type="submit" class="btn btn-success w-100">
-                        <i class="fas fa-plus me-2"></i>Add Currency
+                    <div class="mb-3">
+                        <label for="note_images" class="form-label">Attach Images (Max 5 total)</label>
+                        <input type="file" class="form-control" id="note_images" name="note_images"
+                               accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" multiple>
+                        <div class="form-text">
+                            <small>Max size: 10MB per image. Supported formats: PNG, JPG, JPEG, GIF, WEBP. You can select images multiple times (up to 5 total).</small>
+                        </div>
+                        <div id="image-preview-container" class="mt-2" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Selected Images:</label>
+                                <span id="image-count" class="badge bg-primary">0/5</span>
+                            </div>
+                            <div id="image-previews" class="d-flex flex-wrap gap-3"></div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="clearAddCurrencyImages()">
+                                <i class="fas fa-trash"></i> Clear All
+                            </button>
+                        </div>
+                        
+                        <!-- Enhanced Progress bar for image upload -->
+                        <div id="add-upload-progress-container" class="mt-3" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted fw-medium">
+                                    <i class="fas fa-cloud-upload-alt me-2"></i>Adding currency with images...
+                                </span>
+                                <span id="add-upload-progress-text" class="badge bg-primary">0%</span>
+                            </div>
+                            <div class="progress" style="
+                                height: 12px;
+                                border-radius: 8px;
+                                background: rgba(0, 0, 0, 0.05);
+                                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+                            ">
+                                <div id="add-upload-progress-bar"
+                                     class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar"
+                                     style="
+                                         width: 0%;
+                                         background: linear-gradient(45deg, #007bff, #0056b3);
+                                         border-radius: 8px;
+                                         transition: width 0.3s ease;
+                                     "
+                                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Please wait while your currency and images are being processed...
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100" id="addCurrencyBtn">
+                        <span class="btn-text">
+                            <i class="fas fa-plus me-2"></i>Add Currency
+                        </span>
+                        <span class="btn-loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Adding...
+                        </span>
                     </button>
                 </form>
             </div>
@@ -117,22 +180,27 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    {% if currency.admin_notes %}
-                                        <div class="d-flex align-items-center">
-                                            <i class="fas fa-sticky-note text-info me-2" title="Has notes"></i>
-                                            {% if currency.notes_updated_at %}
-                                                <small class="text-muted"
-                                                       title="{{ currency.notes_updated_at.strftime('%B %d, %Y at %I:%M:%S %p UTC') }}"
-                                                       style="cursor: help;">
-                                                    <span class="relative-time" data-timestamp="{{ currency.notes_updated_at.isoformat() }}Z">
-                                                        <!-- Will be populated by JavaScript -->
-                                                    </span>
-                                                </small>
-                                            {% endif %}
-                                        </div>
-                                    {% else %}
-                                        <i class="fas fa-sticky-note text-muted" title="No notes"></i>
-                                    {% endif %}
+                                    <div class="d-flex align-items-center">
+                                        {% if currency.admin_notes %}
+                                            <i class="fas fa-sticky-note text-info me-2" title="Has text notes"></i>
+                                        {% else %}
+                                            <i class="fas fa-sticky-note text-muted me-2" title="No text notes"></i>
+                                        {% endif %}
+                                        
+                                        {% if currency.images %}
+                                            <i class="fas fa-image text-success me-2" title="{{ currency.images|length }} image note(s)"></i>
+                                        {% endif %}
+                                        
+                                        {% if currency.latest_note_timestamp %}
+                                            <small class="text-muted"
+                                                   title="{{ currency.latest_note_timestamp.strftime('%B %d, %Y at %I:%M:%S %p UTC') }}"
+                                                   style="cursor: help;">
+                                                <span class="relative-time" data-timestamp="{{ currency.latest_note_timestamp.isoformat() }}Z">
+                                                    <!-- Will be populated by JavaScript -->
+                                                </span>
+                                            </small>
+                                        {% endif %}
+                                    </div>
                                 </td>
                                 <td>
                                     <div class="btn-group btn-group-sm" role="group">
@@ -173,7 +241,7 @@
                 <h5 class="modal-title">Edit {{ currency.symbol }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('update_currency', currency_id=currency.id) }}">
+            <form method="POST" action="{{ url_for('update_currency', currency_id=currency.id) }}" enctype="multipart/form-data" onsubmit="handleUpdateCurrencyForm(event, {{ currency.id }})">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="edit_name{{ currency.id }}" class="form-label">Currency Name</label>
@@ -182,42 +250,48 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Buying Rate Range (Exchange buys currency from customer)</label>
+                        <div class="alert alert-info py-1 mb-2">
+                            <small style="font-size: 0.75rem;"><i class="fas fa-info-circle me-1"></i><strong>Rate Format:</strong> How many {{ currency.symbol }} = 1 AED</small>
+                        </div>
                         <div class="row">
                             <div class="col-6">
-                                <label for="edit_min_buying_rate{{ currency.id }}" class="form-label text-success">Min Buying Rate</label>
+                                <label for="edit_min_buying_rate{{ currency.id }}" class="form-label text-success" style="font-size: 0.85rem;">Min Buying Rate</label>
                                 <input type="number" class="form-control" id="edit_min_buying_rate{{ currency.id }}"
                                        name="min_buying_rate_to_aed" value="{{ currency.min_buying_rate_to_aed or '' }}"
-                                       step="0.000001" placeholder="Minimum buying rate">
-                                <small class="text-muted">Minimum rate when exchange buys</small>
+                                       step="0.000001" placeholder="Min buying rate">
+                                <small class="text-muted" style="font-size: 0.7rem;">Min {{ currency.symbol }} per AED</small>
                             </div>
                             <div class="col-6">
-                                <label for="edit_max_buying_rate{{ currency.id }}" class="form-label text-success">Max Buying Rate</label>
+                                <label for="edit_max_buying_rate{{ currency.id }}" class="form-label text-success" style="font-size: 0.85rem;">Max Buying Rate</label>
                                 <input type="number" class="form-control" id="edit_max_buying_rate{{ currency.id }}"
                                        name="max_buying_rate_to_aed" value="{{ currency.max_buying_rate_to_aed or '' }}"
-                                       step="0.000001" placeholder="Maximum buying rate">
-                                <small class="text-muted">Maximum rate when exchange buys</small>
+                                       step="0.000001" placeholder="Max buying rate">
+                                <small class="text-muted" style="font-size: 0.7rem;">Max {{ currency.symbol }} per AED</small>
                             </div>
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Selling Rate Range (Exchange sells currency to customer)</label>
+                        <div class="alert alert-warning py-1 mb-2">
+                            <small style="font-size: 0.75rem;"><i class="fas fa-info-circle me-1"></i><strong>Rate Format:</strong> How many AED = 1 {{ currency.symbol }}</small>
+                        </div>
                         <div class="row">
                             <div class="col-6">
-                                <label for="edit_min_selling_rate{{ currency.id }}" class="form-label text-danger">Min Selling Rate</label>
+                                <label for="edit_min_selling_rate{{ currency.id }}" class="form-label text-danger" style="font-size: 0.85rem;">Min Selling Rate</label>
                                 <input type="number" class="form-control" id="edit_min_selling_rate{{ currency.id }}"
                                        name="min_selling_rate_to_aed" value="{{ currency.min_selling_rate_to_aed or '' }}"
-                                       step="0.000001" placeholder="Minimum selling rate">
-                                <small class="text-muted">Minimum rate when exchange sells</small>
+                                       step="0.000001" placeholder="Min selling rate">
+                                <small class="text-muted" style="font-size: 0.7rem;">Min AED per {{ currency.symbol }}</small>
                             </div>
                             <div class="col-6">
-                                <label for="edit_max_selling_rate{{ currency.id }}" class="form-label text-danger">Max Selling Rate</label>
+                                <label for="edit_max_selling_rate{{ currency.id }}" class="form-label text-danger" style="font-size: 0.85rem;">Max Selling Rate</label>
                                 <input type="number" class="form-control" id="edit_max_selling_rate{{ currency.id }}"
                                        name="max_selling_rate_to_aed" value="{{ currency.max_selling_rate_to_aed or '' }}"
-                                       step="0.000001" placeholder="Maximum selling rate">
-                                <small class="text-muted">Maximum rate when exchange sells</small>
+                                       step="0.000001" placeholder="Max selling rate">
+                                <small class="text-muted" style="font-size: 0.7rem;">Max AED per {{ currency.symbol }}</small>
                             </div>
                         </div>
-                        <div class="form-text">Set rate ranges for exchange operations. Overlapping rates are allowed for flexible pricing.</div>
+                        <div class="form-text" style="font-size: 0.75rem;">Set rate ranges for exchange operations. Overlapping rates are allowed for flexible pricing.</div>
                     </div>
                     <div class="mb-3">
                         <label for="edit_notes{{ currency.id }}" class="form-label">Admin Notes</label>
@@ -225,10 +299,146 @@
                                   placeholder="Add notes about this currency">{{ currency.admin_notes or '' }}</textarea>
                         <div class="form-text">These notes will be visible to users via the info button</div>
                     </div>
+                    
+                    <!-- Existing Images -->
+                    {% if currency.images %}
+                    <div class="mb-3">
+                        <label class="form-label">Attached Images</label>
+                        <div class="d-flex flex-wrap gap-3" style="max-width: 100%;">
+                            {% for image in currency.images %}
+                            <div class="position-relative image-container" data-image-id="{{ image.id }}" style="
+                                width: 140px;
+                                height: 140px;
+                                border-radius: 12px;
+                                overflow: hidden;
+                                background: linear-gradient(145deg, #ffffff, #f8f9fa);
+                                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+                                border: 1px solid rgba(255, 255, 255, 0.2);
+                                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                                backdrop-filter: blur(10px);
+                            ">
+                                <img src="{{ url_for('uploaded_file', filename=image.filename) }}"
+                                     style="width: 100%; height: 100%; object-fit: cover; display: block; transition: all 0.3s ease;"
+                                     alt="{{ image.original_filename }}"
+                                     title="{{ image.original_filename }}{% if image.caption %} - {{ image.caption }}{% endif %}">
+                                <!-- Only show delete button in admin dashboard -->
+                                {% if request.endpoint == 'dashboard' %}
+                                <div class="position-absolute top-0 end-0 image-delete-overlay"
+                                     data-image-id="{{ image.id }}" data-currency-id="{{ currency.id }}"
+                                     onclick="deleteImageSmooth(this.getAttribute('data-image-id'), this.getAttribute('data-currency-id'))"
+                                     style="
+                                         width: 28px;
+                                         height: 28px;
+                                         background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9));
+                                         border: 2px solid rgba(239, 68, 68, 0.8);
+                                         border-radius: 50%;
+                                         cursor: pointer;
+                                         display: flex;
+                                         align-items: center;
+                                         justify-content: center;
+                                         font-size: 14px;
+                                         font-weight: 700;
+                                         color: #dc2626;
+                                         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                                         backdrop-filter: blur(8px);
+                                         opacity: 0.9;
+                                         box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5);
+                                         transform: translateZ(0);
+                                         margin: 6px;
+                                         z-index: 10;
+                                     "
+                                     onmouseover="this.style.opacity='1'; this.style.background='linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.9))'; this.style.borderColor='rgba(239, 68, 68, 1)'; this.style.color='white'; this.style.transform='scale(1.1)'; this.style.boxShadow='0 4px 16px rgba(239, 68, 68, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.8)'"
+                                     onmouseout="this.style.opacity='0.9'; this.style.background='linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9))'; this.style.borderColor='rgba(239, 68, 68, 0.8)'; this.style.color='#dc2626'; this.style.transform='scale(1)'; this.style.boxShadow='0 2px 8px rgba(239, 68, 68, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.5)'"
+                                     title="Delete image">
+                                    ×
+                                </div>
+                                {% endif %}
+                                <!-- File size indicator -->
+                                <div class="position-absolute bottom-0 start-0" style="
+                                    background: rgba(0, 0, 0, 0.6);
+                                    color: white;
+                                    padding: 2px 6px;
+                                    border-radius: 0 8px 0 12px;
+                                    font-size: 10px;
+                                    font-weight: 600;
+                                    backdrop-filter: blur(10px);
+                                ">
+                                    {{ "%.0f"|format(image.file_size / 1024) }}KB
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                {{ currency.images|length }} image(s) attached. Hover over images to see details.
+                            </small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Upload New Images -->
+                    <div class="mb-3">
+                        <label for="edit_images{{ currency.id }}" class="form-label">Add New Images (Max 5 total)</label>
+                        <input type="file" class="form-control" id="edit_images{{ currency.id }}" name="note_images"
+                               accept="image/png,image/jpeg,image/jpg,image/gif,image/webp" multiple>
+                        <div class="form-text">
+                            <small>Max size: 10MB per image. Supported formats: PNG, JPG, JPEG, GIF, WEBP. You can select images multiple times (up to 5 total).</small>
+                        </div>
+                        <div id="edit-image-preview-container{{ currency.id }}" class="mt-2" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Selected Images:</label>
+                                <span id="image-count{{ currency.id }}" class="badge bg-primary">0/5</span>
+                            </div>
+                            <div id="edit-image-previews{{ currency.id }}" class="d-flex flex-wrap gap-3"></div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="clearSelectedImages({{ currency.id }})">
+                                <i class="fas fa-trash"></i> Clear All
+                            </button>
+                        </div>
+                        
+                        <!-- Enhanced Progress bar for image upload -->
+                        <div id="upload-progress-container{{ currency.id }}" class="mt-3" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted fw-medium">
+                                    <i class="fas fa-cloud-upload-alt me-2"></i>Uploading images...
+                                </span>
+                                <span id="upload-progress-text{{ currency.id }}" class="badge bg-primary">0%</span>
+                            </div>
+                            <div class="progress" style="
+                                height: 12px;
+                                border-radius: 8px;
+                                background: rgba(0, 0, 0, 0.05);
+                                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+                            ">
+                                <div id="upload-progress-bar{{ currency.id }}"
+                                     class="progress-bar progress-bar-striped progress-bar-animated"
+                                     role="progressbar"
+                                     style="
+                                         width: 0%;
+                                         background: linear-gradient(45deg, #007bff, #0056b3);
+                                         border-radius: 8px;
+                                         transition: width 0.3s ease;
+                                     "
+                                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Please wait while your images are being uploaded and processed...
+                                </small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Currency</button>
+                    <button type="submit" class="btn btn-primary" id="updateBtn{{ currency.id }}">
+                        <span class="btn-text">Update Currency</span>
+                        <span class="btn-loading" style="display: none;">
+                            <i class="fas fa-spinner fa-spin"></i> Updating...
+                        </span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -296,6 +506,92 @@
 
 .instant-tooltip[title]:hover {
     overflow: visible;
+}
+
+/* Enhanced image container styles */
+.image-container {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.image-container:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.image-container img {
+    transition: all 0.3s ease;
+}
+
+.image-container:hover img {
+    transform: scale(1.02);
+}
+
+/* Enhanced delete overlay styles */
+.image-delete-overlay {
+    opacity: 0.8;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.9) !important;
+}
+
+.image-container:hover .image-delete-overlay {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* Make delete overlay always visible on mobile */
+@media (max-width: 768px) {
+    .image-delete-overlay {
+        opacity: 0.9;
+    }
+}
+
+.image-delete-overlay:hover {
+    background: rgba(220, 53, 69, 0.9) !important;
+    color: white !important;
+    transform: scale(1.1);
+}
+
+.image-delete-overlay:active {
+    transform: scale(0.95);
+}
+
+/* Smooth transitions for image removal */
+.image-container.removing {
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Material Design inspired snackbar styles */
+#snackbar-container {
+    font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Responsive image grid */
+@media (max-width: 768px) {
+    .image-container {
+        width: 100px !important;
+        height: 100px !important;
+    }
+    
+    .image-delete-btn {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 8px !important;
+        margin: 2px !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .image-container {
+        width: 80px !important;
+        height: 80px !important;
+    }
+    
+    .d-flex.flex-wrap.gap-2 {
+        gap: 0.5rem !important;
+    }
 }
 </style>
 
@@ -385,6 +681,109 @@ function updateRelativeTimes() {
     });
 }
 
+// Global array to store selected files for add currency form
+const addCurrencySelectedFiles = [];
+
+// Form submission handler for add currency with enhanced image handling
+function handleAddCurrencyForm(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    const submitBtn = document.getElementById('addCurrencyBtn');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const btnLoading = submitBtn.querySelector('.btn-loading');
+    const progressContainer = document.getElementById('add-upload-progress-container');
+    const progressBar = document.getElementById('add-upload-progress-bar');
+    const progressText = document.getElementById('add-upload-progress-text');
+    
+    // Add selected files to form data
+    if (addCurrencySelectedFiles.length > 0) {
+        // Remove any existing note_images from form data
+        formData.delete('note_images');
+        
+        // Add selected files
+        addCurrencySelectedFiles.forEach((file) => {
+            formData.append('note_images', file);
+        });
+    }
+    
+    // Show loading state
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+    submitBtn.disabled = true;
+    
+    // Show progress bar if there are images to upload
+    if (addCurrencySelectedFiles.length > 0) {
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+    }
+    
+    // Create XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+    
+    // Track upload progress with smooth animations
+    xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable && addCurrencySelectedFiles.length > 0) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100);
+            
+            // Smooth progress bar animation
+            progressBar.style.width = percentComplete + '%';
+            progressBar.setAttribute('aria-valuenow', percentComplete);
+            progressText.textContent = percentComplete + '%';
+            
+            // Dynamic badge color based on progress
+            if (percentComplete < 50) {
+                progressText.className = 'badge bg-primary';
+            } else if (percentComplete < 90) {
+                progressText.className = 'badge bg-warning';
+            } else {
+                progressText.className = 'badge bg-success';
+            }
+        }
+    });
+    
+    // Handle response
+    xhr.addEventListener('load', function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            showMaterialSnackbar('Currency added successfully!', 'success');
+            
+            // Clear selected files
+            clearAddCurrencyImages();
+            
+            // Reload page after successful addition
+            setTimeout(() => {
+                location.reload();
+            }, 500);
+        } else {
+            showMaterialSnackbar('An error occurred while adding the currency.', 'error');
+        }
+    });
+    
+    xhr.addEventListener('error', function() {
+        showMaterialSnackbar('An error occurred while adding the currency.', 'error');
+    });
+    
+    xhr.addEventListener('loadend', function() {
+        // Restore button state
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+        submitBtn.disabled = false;
+        
+        // Hide progress bar
+        if (progressContainer) {
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 200);
+        }
+    });
+    
+    // Send the request
+    xhr.open('POST', form.action);
+    xhr.send(formData);
+}
+
 // Initialize relative times when page loads
 document.addEventListener('DOMContentLoaded', function() {
     updateRelativeTimes();
@@ -410,6 +809,993 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // Form submission handler is now attached via onsubmit attribute
+});
+
+// Image upload and management functions
+function uploadImage(currencyId) {
+    const fileInput = document.getElementById(`edit_image${currencyId}`);
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showMaterialSnackbar('Please select an image file first.', 'error');
+        return;
+    }
+    
+    // Check file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        showMaterialSnackbar('File size exceeds 10MB limit.', 'error');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    // Show loading state
+    const uploadBtn = event.target;
+    const originalText = uploadBtn.innerHTML;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    uploadBtn.disabled = true;
+    
+    fetch(`/upload_image/${currencyId}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMaterialSnackbar('Image uploaded successfully!', 'success');
+            location.reload(); // Refresh to show new image
+        } else {
+            showMaterialSnackbar(`Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMaterialSnackbar('An error occurred while uploading the image', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        uploadBtn.innerHTML = originalText;
+        uploadBtn.disabled = false;
+        fileInput.value = ''; // Clear file input
+    });
+}
+
+function uploadMultipleImages(currencyId) {
+    const fileInput = document.getElementById(`edit_images${currencyId}`);
+    const files = fileInput.files;
+    
+    if (!files || files.length === 0) {
+        showMaterialSnackbar('Please select at least one image file first.', 'error');
+        return;
+    }
+    
+    // Check file sizes (10MB limit per file)
+    for (let i = 0; i < files.length; i++) {
+        if (files[i].size > 10 * 1024 * 1024) {
+            showMaterialSnackbar(`File "${files[i].name}" exceeds 10MB limit.`, 'error');
+            return;
+        }
+    }
+    
+    const formData = new FormData();
+    
+    // Add all files to form data
+    for (let i = 0; i < files.length; i++) {
+        formData.append('images', files[i]);
+    }
+    
+    // Get captions from preview containers
+    const previewContainer = document.getElementById(`edit-image-previews${currencyId}`);
+    const captionInputs = previewContainer.querySelectorAll('.caption-input');
+    captionInputs.forEach((input, index) => {
+        formData.append(`caption_${index}`, input.value || '');
+    });
+    
+    // Show loading state
+    const uploadBtn = event.target;
+    const originalText = uploadBtn.innerHTML;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    uploadBtn.disabled = true;
+    
+    fetch(`/upload_multiple_images/${currencyId}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMaterialSnackbar(`${data.uploaded_count} image(s) uploaded successfully!`, 'success');
+            location.reload(); // Refresh to show new images
+        } else {
+            showMaterialSnackbar(`Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMaterialSnackbar('An error occurred while uploading the images', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        uploadBtn.innerHTML = originalText;
+        uploadBtn.disabled = false;
+        fileInput.value = ''; // Clear file input
+        // Hide preview container
+        document.getElementById(`edit-image-preview-container${currencyId}`).style.display = 'none';
+    });
+}
+
+function deleteImage(imageId, currencyId) {
+    if (!confirm('Are you sure you want to delete this image?')) {
+        return;
+    }
+    
+    // Find the image card element
+    const imageCard = document.querySelector(`[data-image-id="${imageId}"]`);
+    if (imageCard) {
+        // Show loading state
+        const deleteBtn = imageCard.querySelector('.btn-outline-danger');
+        const originalText = deleteBtn.innerHTML;
+        deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        deleteBtn.disabled = true;
+    }
+    
+    fetch(`/delete_image/${imageId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remove the image card from the DOM
+            if (imageCard) {
+                imageCard.closest('.col-md-4').remove();
+            }
+            
+            // Check if there are any images left
+            const modal = document.querySelector(`#editModal${currencyId}`);
+            const imagesContainer = modal.querySelector('.row');
+            const remainingImages = imagesContainer.querySelectorAll('.col-md-4');
+            
+            if (remainingImages.length === 0) {
+                // Hide the entire "Attached Images" section if no images remain
+                const attachedImagesSection = modal.querySelector('.mb-3:has(.form-label:contains("Attached Images"))');
+                if (attachedImagesSection) {
+                    attachedImagesSection.style.display = 'none';
+                }
+            }
+            
+            // Show success message without closing modal
+            showToast('Image deleted successfully!', 'success');
+        } else {
+            alert(`Error: ${data.error}`);
+            // Restore button state on error
+            if (imageCard) {
+                const deleteBtn = imageCard.querySelector('.btn-outline-danger');
+                deleteBtn.innerHTML = originalText;
+                deleteBtn.disabled = false;
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while deleting the image.');
+        // Restore button state on error
+        if (imageCard) {
+            const deleteBtn = imageCard.querySelector('.btn-outline-danger');
+            deleteBtn.innerHTML = originalText;
+            deleteBtn.disabled = false;
+        }
+    });
+}
+
+// New smooth delete function without confirmation alerts
+function deleteImageSmooth(imageId, currencyId) {
+    // Find the image container element
+    const imageContainer = document.querySelector(`[data-image-id="${imageId}"]`);
+    if (imageContainer) {
+        // Show loading state on the overlay
+        const deleteOverlay = imageContainer.querySelector('.image-delete-overlay');
+        const originalContent = deleteOverlay.innerHTML;
+        deleteOverlay.innerHTML = '⟳';
+        deleteOverlay.style.pointerEvents = 'none';
+        
+        // Add fade out animation
+        imageContainer.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        imageContainer.style.opacity = '0.5';
+        imageContainer.style.transform = 'scale(0.95)';
+    }
+    
+    fetch(`/delete_image/${imageId}`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Smooth removal with animation
+            if (imageContainer) {
+                imageContainer.style.opacity = '0';
+                imageContainer.style.transform = 'scale(0.8)';
+                
+                setTimeout(() => {
+                    imageContainer.remove();
+                    
+                    // Check if there are any images left
+                    const modal = document.querySelector(`#editModal${currencyId}`);
+                    const imagesContainer = modal.querySelector('.d-flex.flex-wrap');
+                    const remainingImages = imagesContainer ? imagesContainer.querySelectorAll('.image-container') : [];
+                    
+                    if (remainingImages.length === 0) {
+                        // Hide the entire "Attached Images" section if no images remain
+                        const attachedImagesSection = modal.querySelector('.mb-3:has(.form-label:contains("Attached Images"))');
+                        if (attachedImagesSection) {
+                            attachedImagesSection.style.display = 'none';
+                        }
+                    }
+                }, 300);
+            }
+            
+            // Show success message using Material Design snack bar
+            showMaterialSnackbar('Image deleted successfully', 'success');
+        } else {
+            // Restore overlay state and container appearance on error
+            if (imageContainer) {
+                const deleteOverlay = imageContainer.querySelector('.image-delete-overlay');
+                deleteOverlay.innerHTML = originalContent;
+                deleteOverlay.style.pointerEvents = 'auto';
+                imageContainer.style.opacity = '1';
+                imageContainer.style.transform = 'scale(1)';
+            }
+            showMaterialSnackbar(`Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        // Restore overlay state and container appearance on error
+        if (imageContainer) {
+            const deleteOverlay = imageContainer.querySelector('.image-delete-overlay');
+            deleteOverlay.innerHTML = originalContent;
+            deleteOverlay.style.pointerEvents = 'auto';
+            imageContainer.style.opacity = '1';
+            imageContainer.style.transform = 'scale(1)';
+        }
+        showMaterialSnackbar('An error occurred while deleting the image', 'error');
+    });
+}
+
+// Global array to store selected files for each currency
+const selectedFiles = {};
+
+// Image preview functions with accumulative selection
+function previewImages(input, containerId, previewsId) {
+    const container = document.getElementById(containerId);
+    const previews = document.getElementById(previewsId);
+    const currencyId = input.id.replace('edit_images', '');
+    const countBadge = document.getElementById(`image-count${currencyId}`);
+    
+    // Initialize selectedFiles array for this currency if not exists
+    if (!selectedFiles[currencyId]) {
+        selectedFiles[currencyId] = [];
+    }
+    
+    if (input.files && input.files.length > 0) {
+        // Add new files to existing selection (up to 5 max)
+        Array.from(input.files).forEach((file) => {
+            if (selectedFiles[currencyId].length >= 5) {
+                showMaterialSnackbar('Maximum 5 images allowed. Additional images will be ignored.', 'warning');
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                showMaterialSnackbar(`File "${file.name}" exceeds 10MB limit and will be skipped.`, 'error');
+                return;
+            }
+            
+            // Check if file already exists (by name and size)
+            const exists = selectedFiles[currencyId].some(existingFile =>
+                existingFile.name === file.name && existingFile.size === file.size
+            );
+            
+            if (!exists) {
+                selectedFiles[currencyId].push(file);
+            } else {
+                showMaterialSnackbar(`File "${file.name}" is already selected.`, 'warning');
+            }
+        });
+        
+        // Clear the input to allow selecting the same files again
+        input.value = '';
+        
+        // Update display
+        updateImagePreviews(currencyId, container, previews, countBadge);
+    }
+}
+
+// Function to update image previews display
+function updateImagePreviews(currencyId, container, previews, countBadge) {
+    if (selectedFiles[currencyId] && selectedFiles[currencyId].length > 0) {
+        container.style.display = 'block';
+        previews.innerHTML = '';
+        
+        selectedFiles[currencyId].forEach((file, index) => {
+            // Create image container with new layout style
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'position-relative image-container';
+            imageContainer.style.cssText = 'width: 120px; height: 120px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px;';
+            imageContainer.setAttribute('data-file-index', index);
+            
+            const img = document.createElement('img');
+            img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
+            img.alt = file.name;
+            img.title = file.name;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            
+            // Add remove button overlay
+            const removeOverlay = document.createElement('div');
+            removeOverlay.className = 'position-absolute top-0 end-0';
+            removeOverlay.style.cssText = 'width: 24px; height: 24px; background: rgba(220, 53, 69, 0.9); border-radius: 0 8px 0 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: white; transition: all 0.2s ease;';
+            removeOverlay.innerHTML = '×';
+            removeOverlay.title = 'Remove image';
+            removeOverlay.onclick = function() {
+                removeSelectedImage(currencyId, index);
+            };
+            
+            // Add file info overlay
+            const infoOverlay = document.createElement('div');
+            infoOverlay.className = 'position-absolute bottom-0 start-0 end-0';
+            infoOverlay.style.cssText = 'background: linear-gradient(transparent, rgba(0,0,0,0.7)); color: white; padding: 8px 4px 4px; font-size: 10px; line-height: 1.2;';
+            infoOverlay.innerHTML = `
+                <div style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${file.name}</div>
+                <div>${(file.size / 1024).toFixed(1)} KB</div>
+            `;
+            
+            imageContainer.appendChild(img);
+            imageContainer.appendChild(removeOverlay);
+            imageContainer.appendChild(infoOverlay);
+            previews.appendChild(imageContainer);
+        });
+        
+        // Update count badge
+        countBadge.textContent = `${selectedFiles[currencyId].length}/5`;
+        countBadge.className = selectedFiles[currencyId].length >= 5 ? 'badge bg-warning' : 'badge bg-primary';
+    } else {
+        container.style.display = 'none';
+        countBadge.textContent = '0/5';
+        countBadge.className = 'badge bg-primary';
+    }
+}
+
+// Function to remove a selected image
+function removeSelectedImage(currencyId, index) {
+    if (selectedFiles[currencyId] && selectedFiles[currencyId][index]) {
+        selectedFiles[currencyId].splice(index, 1);
+        
+        // Update display
+        const container = document.getElementById(`edit-image-preview-container${currencyId}`);
+        const previews = document.getElementById(`edit-image-previews${currencyId}`);
+        const countBadge = document.getElementById(`image-count${currencyId}`);
+        
+        updateImagePreviews(currencyId, container, previews, countBadge);
+    }
+}
+
+// Function to clear all selected images
+function clearSelectedImages(currencyId) {
+    selectedFiles[currencyId] = [];
+    
+    const container = document.getElementById(`edit-image-preview-container${currencyId}`);
+    const previews = document.getElementById(`edit-image-previews${currencyId}`);
+    const countBadge = document.getElementById(`image-count${currencyId}`);
+    
+    updateImagePreviews(currencyId, container, previews, countBadge);
+}
+
+// Enhanced preview function for Add Currency form with accumulative selection
+function previewAddCurrencyImages(input) {
+    const container = document.getElementById('image-preview-container');
+    const previews = document.getElementById('image-previews');
+    const countBadge = document.getElementById('image-count');
+    
+    if (input.files && input.files.length > 0) {
+        // Add new files to existing selection (up to 5 max)
+        Array.from(input.files).forEach((file) => {
+            if (addCurrencySelectedFiles.length >= 5) {
+                showMaterialSnackbar('Maximum 5 images allowed. Additional images will be ignored.', 'warning');
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                showMaterialSnackbar(`File "${file.name}" exceeds 10MB limit and will be skipped.`, 'error');
+                return;
+            }
+            
+            // Check if file already exists (by name and size)
+            const exists = addCurrencySelectedFiles.some(existingFile =>
+                existingFile.name === file.name && existingFile.size === file.size
+            );
+            
+            if (!exists) {
+                addCurrencySelectedFiles.push(file);
+            } else {
+                showMaterialSnackbar(`File "${file.name}" is already selected.`, 'warning');
+            }
+        });
+        
+        // Clear the input to allow selecting the same files again
+        input.value = '';
+        
+        // Update display
+        updateAddCurrencyImagePreviews(container, previews, countBadge);
+    }
+}
+
+// Function to update add currency image previews display
+function updateAddCurrencyImagePreviews(container, previews, countBadge) {
+    if (addCurrencySelectedFiles.length > 0) {
+        container.style.display = 'block';
+        previews.innerHTML = '';
+        
+        addCurrencySelectedFiles.forEach((file, index) => {
+            // Create image container with modern design
+            const imageContainer = document.createElement('div');
+            imageContainer.className = 'position-relative image-container';
+            imageContainer.style.cssText = 'width: 120px; height: 120px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 10px;';
+            imageContainer.setAttribute('data-file-index', index);
+            
+            const img = document.createElement('img');
+            img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
+            img.alt = file.name;
+            img.title = file.name;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            
+            // Add remove button overlay
+            const removeOverlay = document.createElement('div');
+            removeOverlay.className = 'position-absolute top-0 end-0';
+            removeOverlay.style.cssText = 'width: 24px; height: 24px; background: rgba(220, 53, 69, 0.9); border-radius: 0 8px 0 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: white; transition: all 0.2s ease;';
+            removeOverlay.innerHTML = '×';
+            removeOverlay.title = 'Remove image';
+            removeOverlay.onclick = function() {
+                removeAddCurrencySelectedImage(index);
+            };
+            
+            // Add file info overlay
+            const infoOverlay = document.createElement('div');
+            infoOverlay.className = 'position-absolute bottom-0 start-0 end-0';
+            infoOverlay.style.cssText = 'background: linear-gradient(transparent, rgba(0,0,0,0.7)); color: white; padding: 8px 4px 4px; font-size: 10px; line-height: 1.2;';
+            infoOverlay.innerHTML = `
+                <div style="font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${file.name}</div>
+                <div>${(file.size / 1024).toFixed(1)} KB</div>
+            `;
+            
+            imageContainer.appendChild(img);
+            imageContainer.appendChild(removeOverlay);
+            imageContainer.appendChild(infoOverlay);
+            previews.appendChild(imageContainer);
+        });
+        
+        // Update count badge
+        countBadge.textContent = `${addCurrencySelectedFiles.length}/5`;
+        countBadge.className = addCurrencySelectedFiles.length >= 5 ? 'badge bg-warning' : 'badge bg-primary';
+    } else {
+        container.style.display = 'none';
+        countBadge.textContent = '0/5';
+        countBadge.className = 'badge bg-primary';
+    }
+}
+
+// Function to remove a selected image from add currency form
+function removeAddCurrencySelectedImage(index) {
+    if (addCurrencySelectedFiles[index]) {
+        addCurrencySelectedFiles.splice(index, 1);
+        
+        // Update display
+        const container = document.getElementById('image-preview-container');
+        const previews = document.getElementById('image-previews');
+        const countBadge = document.getElementById('image-count');
+        
+        updateAddCurrencyImagePreviews(container, previews, countBadge);
+    }
+}
+
+// Function to clear all selected images from add currency form
+function clearAddCurrencyImages() {
+    addCurrencySelectedFiles.length = 0;
+    
+    const container = document.getElementById('image-preview-container');
+    const previews = document.getElementById('image-previews');
+    const countBadge = document.getElementById('image-count');
+    
+    updateAddCurrencyImagePreviews(container, previews, countBadge);
+}
+
+// Enhanced DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', function() {
+    updateRelativeTimes();
+    
+    // Update every minute
+    setInterval(updateRelativeTimes, 60000);
+    
+    // Make tooltips appear immediately using CSS and proper event handling
+    const relativeTimeElements = document.querySelectorAll('.relative-time[title]');
+    relativeTimeElements.forEach(element => {
+        // Add CSS class for immediate tooltip display
+        element.classList.add('instant-tooltip');
+        
+        // Store original title for reference
+        const originalTitle = element.getAttribute('title');
+        
+        // Update title on mouse enter to ensure it's current
+        element.addEventListener('mouseenter', function() {
+            const timestamp = element.getAttribute('data-timestamp');
+            if (timestamp) {
+                const exactTime = formatExactTime(timestamp);
+                element.setAttribute('title', exactTime);
+            }
+        });
+    });
+    
+    // Add currency form image preview
+    const noteImagesInput = document.getElementById('note_images');
+    if (noteImagesInput) {
+        noteImagesInput.addEventListener('change', function() {
+            previewAddCurrencyImages(this);
+        });
+    }
+    
+    // Edit modal image previews
+    document.querySelectorAll('[id^="edit_images"]').forEach(input => {
+        const currencyId = input.id.replace('edit_images', '');
+        input.addEventListener('change', function() {
+            previewImages(this, `edit-image-preview-container${currencyId}`, `edit-image-previews${currencyId}`);
+        });
+    });
+});
+
+// Toast notification function
+function showToast(message, type = 'info') {
+    // Create toast container if it doesn't exist
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '1055';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                    ${message}
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Initialize and show toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: 3000
+    });
+    toast.show();
+    
+    // Remove toast element after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        toastElement.remove();
+    });
+}
+
+// Enhanced uploadMultipleImages function to refresh the modal content
+function uploadMultipleImagesAndRefresh(currencyId) {
+    const fileInput = document.getElementById(`edit_images${currencyId}`);
+    const files = fileInput.files;
+    
+    if (!files || files.length === 0) {
+        showMaterialSnackbar('Please select at least one image file first.', 'error');
+        return;
+    }
+    
+    // Check file sizes (10MB limit per file)
+    for (let i = 0; i < files.length; i++) {
+        if (files[i].size > 10 * 1024 * 1024) {
+            showMaterialSnackbar(`File "${files[i].name}" exceeds 10MB limit.`, 'error');
+            return;
+        }
+    }
+    
+    const formData = new FormData();
+    
+    // Add all files to form data
+    for (let i = 0; i < files.length; i++) {
+        formData.append('images', files[i]);
+    }
+    
+    // Get captions from preview containers
+    const previewContainer = document.getElementById(`edit-image-previews${currencyId}`);
+    const captionInputs = previewContainer.querySelectorAll('.caption-input');
+    captionInputs.forEach((input, index) => {
+        formData.append(`caption_${index}`, input.value || '');
+    });
+    
+    // Show loading state
+    const uploadBtn = event.target;
+    const originalText = uploadBtn.innerHTML;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+    uploadBtn.disabled = true;
+    
+    fetch(`/upload_multiple_images/${currencyId}`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMaterialSnackbar(`${data.uploaded_files.length} image(s) uploaded successfully!`, 'success');
+            
+            // Refresh the images section in the modal
+            refreshModalImages(currencyId);
+            
+            // Clear the file input and hide preview
+            fileInput.value = '';
+            document.getElementById(`edit-image-preview-container${currencyId}`).style.display = 'none';
+        } else {
+            showMaterialSnackbar(`Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMaterialSnackbar('An error occurred while uploading the images', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        uploadBtn.innerHTML = originalText;
+        uploadBtn.disabled = false;
+    });
+}
+
+// Function to refresh images in modal without closing it
+function refreshModalImages(currencyId) {
+    fetch(`/currency_notes/${currencyId}`)
+        .then(response => response.json())
+        .then(data => {
+            const modal = document.querySelector(`#editModal${currencyId}`);
+            const imagesSection = modal.querySelector('.mb-3:has(.form-label:contains("Attached Images"))');
+            
+            if (data.images && data.images.length > 0) {
+                // Create or update the images section with modern design
+                // Check if we're in admin dashboard context
+                const isAdminDashboard = window.location.pathname.includes('/dashboard');
+                const imagesHtml = data.images.map(image => `
+                    <div class="position-relative image-container" data-image-id="${image.id}" style="
+                        width: 160px;
+                        height: 160px;
+                        border-radius: 12px;
+                        overflow: hidden;
+                        background: linear-gradient(145deg, #ffffff, #f8f9fa);
+                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                        backdrop-filter: blur(10px);
+                    ">
+                        <img src="/uploads/${image.filename}"
+                             style="width: 100%; height: 100%; object-fit: cover; display: block; transition: all 0.3s ease;"
+                             alt="${image.original_filename}"
+                             title="${image.original_filename}${image.caption ? ' - ' + image.caption : ''}">
+                        ${isAdminDashboard ? `
+                        <!-- Only show delete button in admin dashboard -->
+                        <div class="position-absolute top-0 end-0 image-delete-overlay"
+                             data-image-id="${image.id}" data-currency-id="${currencyId}"
+                             onclick="deleteImageSmooth(this.getAttribute('data-image-id'), this.getAttribute('data-currency-id'))"
+                             style="
+                                 width: 28px;
+                                 height: 28px;
+                                 background: rgba(220, 53, 69, 0.9);
+                                 border-radius: 0 12px 0 12px;
+                                 cursor: pointer;
+                                 display: flex;
+                                 align-items: center;
+                                 justify-content: center;
+                                 font-size: 16px;
+                                 font-weight: bold;
+                                 color: white;
+                                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                                 backdrop-filter: blur(10px);
+                                 opacity: 0.8;
+                             "
+                             onmouseover="this.style.opacity='1'; this.style.transform='scale(1.1)'"
+                             onmouseout="this.style.opacity='0.8'; this.style.transform='scale(1)'"
+                             title="Delete image">
+                            ×
+                        </div>
+                        ` : ''}
+                        <!-- File size indicator -->
+                        <div class="position-absolute bottom-0 start-0" style="
+                            background: rgba(0, 0, 0, 0.6);
+                            color: white;
+                            padding: 2px 6px;
+                            border-radius: 0 8px 0 12px;
+                            font-size: 10px;
+                            font-weight: 600;
+                            backdrop-filter: blur(10px);
+                        ">
+                            ${Math.round(image.file_size / 1024)}KB
+                        </div>
+                    </div>
+                `).join('');
+                
+                if (imagesSection) {
+                    // Update existing section
+                    const flexContainer = imagesSection.querySelector('.d-flex.flex-wrap');
+                    flexContainer.innerHTML = imagesHtml;
+                    flexContainer.className = 'd-flex flex-wrap gap-3';
+                    flexContainer.style.maxWidth = '100%';
+                    imagesSection.style.display = 'block';
+                    
+                    // Update the info text
+                    const infoText = imagesSection.querySelector('.mt-2 small');
+                    if (infoText) {
+                        infoText.innerHTML = `<i class="fas fa-info-circle me-1"></i>${data.images.length} image(s) attached. Hover over images to see details.`;
+                    }
+                } else {
+                    // Create new section
+                    const newImagesSection = document.createElement('div');
+                    newImagesSection.className = 'mb-3';
+                    newImagesSection.innerHTML = `
+                        <label class="form-label">Attached Images</label>
+                        <div class="d-flex flex-wrap gap-3" style="max-width: 100%;">
+                            ${imagesHtml}
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                ${data.images.length} image(s) attached. Hover over images to see details.
+                            </small>
+                        </div>
+                    `;
+                    
+                    // Insert before the "Add New Images" section
+                    const addNewSection = modal.querySelector('.mb-3:has(.form-label:contains("Add New Images"))');
+                    addNewSection.parentNode.insertBefore(newImagesSection, addNewSection);
+                }
+                
+                // Update relative times
+                updateRelativeTimes();
+            } else if (imagesSection) {
+                // Hide the section if no images
+                imagesSection.style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error refreshing images:', error);
+        });
+}
+
+// Material Design Snackbar function
+function showMaterialSnackbar(message, type = 'info') {
+    // Create snackbar container if it doesn't exist
+    let snackbarContainer = document.getElementById('snackbar-container');
+    if (!snackbarContainer) {
+        snackbarContainer = document.createElement('div');
+        snackbarContainer.id = 'snackbar-container';
+        snackbarContainer.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1060;
+            pointer-events: none;
+        `;
+        document.body.appendChild(snackbarContainer);
+    }
+    
+    // Create snackbar element
+    const snackbarId = 'snackbar-' + Date.now();
+    const snackbar = document.createElement('div');
+    snackbar.id = snackbarId;
+    snackbar.style.cssText = `
+        background: ${type === 'success' ? '#4caf50' : type === 'error' ? '#f44336' : '#323232'};
+        color: white;
+        padding: 14px 24px;
+        border-radius: 4px;
+        box-shadow: 0 3px 5px -1px rgba(0,0,0,0.2), 0 6px 10px 0 rgba(0,0,0,0.14), 0 1px 18px 0 rgba(0,0,0,0.12);
+        font-family: 'Roboto', sans-serif;
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 20px;
+        min-width: 288px;
+        max-width: 568px;
+        opacity: 0;
+        transform: translateY(100px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: auto;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    `;
+    
+    const messageSpan = document.createElement('span');
+    messageSpan.textContent = message;
+    snackbar.appendChild(messageSpan);
+    
+    // Add icon based on type
+    const icon = document.createElement('i');
+    icon.className = `fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2`;
+    snackbar.insertBefore(icon, messageSpan);
+    
+    snackbarContainer.appendChild(snackbar);
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+        snackbar.style.opacity = '1';
+        snackbar.style.transform = 'translateY(0)';
+    });
+    
+    // Auto hide after 3 seconds
+    setTimeout(() => {
+        snackbar.style.opacity = '0';
+        snackbar.style.transform = 'translateY(100px)';
+        
+        setTimeout(() => {
+            if (snackbar.parentNode) {
+                snackbar.parentNode.removeChild(snackbar);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Handle update currency form with image uploads
+function handleUpdateCurrencyForm(event, currencyId) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const formData = new FormData(form);
+    const updateBtn = document.getElementById(`updateBtn${currencyId}`);
+    const btnText = updateBtn.querySelector('.btn-text');
+    const btnLoading = updateBtn.querySelector('.btn-loading');
+    const progressContainer = document.getElementById(`upload-progress-container${currencyId}`);
+    const progressBar = document.getElementById(`upload-progress-bar${currencyId}`);
+    const progressText = document.getElementById(`upload-progress-text${currencyId}`);
+    
+    // Add selected files to form data
+    if (selectedFiles[currencyId] && selectedFiles[currencyId].length > 0) {
+        // Remove any existing note_images from form data
+        formData.delete('note_images');
+        
+        // Add selected files
+        selectedFiles[currencyId].forEach((file) => {
+            formData.append('note_images', file);
+        });
+    }
+    
+    // Show loading state
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline';
+    updateBtn.disabled = true;
+    
+    // Show progress bar if there are images to upload
+    if (selectedFiles[currencyId] && selectedFiles[currencyId].length > 0) {
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+    }
+    
+    // Create XMLHttpRequest for progress tracking
+    const xhr = new XMLHttpRequest();
+    
+    // Enhanced track upload progress with smooth animations
+    xhr.upload.addEventListener('progress', function(e) {
+        if (e.lengthComputable && selectedFiles[currencyId] && selectedFiles[currencyId].length > 0) {
+            const percentComplete = Math.round((e.loaded / e.total) * 100);
+            
+            // Smooth progress bar animation
+            progressBar.style.width = percentComplete + '%';
+            progressBar.setAttribute('aria-valuenow', percentComplete);
+            progressText.textContent = percentComplete + '%';
+            
+            // Dynamic badge color based on progress
+            if (percentComplete < 50) {
+                progressText.className = 'badge bg-primary';
+            } else if (percentComplete < 90) {
+                progressText.className = 'badge bg-warning';
+            } else {
+                progressText.className = 'badge bg-success';
+            }
+        }
+    });
+    
+    // Handle response
+    xhr.addEventListener('load', function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            let response;
+            try {
+                response = JSON.parse(xhr.responseText);
+            } catch (e) {
+                // If not JSON, assume success (traditional form response)
+                response = { success: true };
+            }
+            
+            if (response.success !== false) {
+                showMaterialSnackbar('Currency updated successfully!', 'success');
+                
+                // Refresh the images section if new images were uploaded
+                if (selectedFiles[currencyId] && selectedFiles[currencyId].length > 0) {
+                    setTimeout(() => {
+                        refreshModalImages(currencyId);
+                        // Clear selected files
+                        clearSelectedImages(currencyId);
+                    }, 500);
+                }
+                
+                // Close the modal after successful update - faster and more fluid
+                setTimeout(() => {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById(`editModal${currencyId}`));
+                    if (modal) {
+                        modal.hide();
+                    }
+                    // Faster page reload
+                    location.reload();
+                }, 400);
+            } else {
+                showMaterialSnackbar(`Error: ${response.error || 'Unknown error'}`, 'error');
+            }
+        } else {
+            showMaterialSnackbar('An error occurred while updating the currency.', 'error');
+        }
+    });
+    
+    xhr.addEventListener('error', function() {
+        showMaterialSnackbar('An error occurred while updating the currency.', 'error');
+    });
+    
+    xhr.addEventListener('loadend', function() {
+        // Restore button state
+        btnText.style.display = 'inline';
+        btnLoading.style.display = 'none';
+        updateBtn.disabled = false;
+        
+        // Hide progress bar faster
+        if (progressContainer) {
+            setTimeout(() => {
+                progressContainer.style.display = 'none';
+            }, 200);
+        }
+    });
+    
+    // Send the request
+    xhr.open('POST', form.action);
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.send(formData);
+}
+
+// Hide delete buttons for non-admin users
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if this is not the admin dashboard
+    if (!window.location.pathname.includes('/dashboard')) {
+        const deleteOverlays = document.querySelectorAll('.image-delete-overlay');
+        deleteOverlays.forEach(overlay => {
+            overlay.style.display = 'none';
+        });
+    }
 });
 </script>
 

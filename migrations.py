@@ -27,6 +27,14 @@ def run_migrations():
         print("Running migration 004: Remove old rate_to_aed column...")
         migration_004_remove_old_rate_column()
         
+        # Migration 005: Add note_images table for image attachments
+        print("Running migration 005: Add note_images table...")
+        migration_005_add_note_images_table()
+        
+        # Migration 006: Add caption column to note_images table
+        print("Running migration 006: Add caption column to note_images...")
+        migration_006_add_caption_to_note_images()
+        
         # Create all tables
         print("Creating database tables...")
         db.create_all()
@@ -249,6 +257,94 @@ def migration_004_remove_old_rate_column():
     except Exception as e:
         print(f"Migration 004 failed: {e}")
         print("This may be expected if the old column doesn't exist")
+
+def migration_005_add_note_images_table():
+    """Migration 005: Add note_images table for image attachments"""
+    from app import db
+    
+    try:
+        # Check if note_images table already exists
+        inspector = db.inspect(db.engine)
+        if 'note_images' not in inspector.get_table_names():
+            print("Creating note_images table...")
+            
+            if db.engine.dialect.name == 'postgresql':
+                with db.engine.connect() as connection:
+                    connection.execute(text("""
+                        CREATE TABLE note_images (
+                            id SERIAL PRIMARY KEY,
+                            currency_id INTEGER NOT NULL REFERENCES currency(id) ON DELETE CASCADE,
+                            filename VARCHAR(255) NOT NULL,
+                            original_filename VARCHAR(255) NOT NULL,
+                            file_size INTEGER NOT NULL,
+                            mime_type VARCHAR(100) NOT NULL,
+                            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """))
+                    connection.commit()
+                    print("✅ Created note_images table (PostgreSQL)")
+                    
+            elif db.engine.dialect.name == 'sqlite':
+                with db.engine.connect() as connection:
+                    connection.execute(text("""
+                        CREATE TABLE note_images (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            currency_id INTEGER NOT NULL,
+                            filename VARCHAR(255) NOT NULL,
+                            original_filename VARCHAR(255) NOT NULL,
+                            file_size INTEGER NOT NULL,
+                            mime_type VARCHAR(100) NOT NULL,
+                            uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (currency_id) REFERENCES currency(id) ON DELETE CASCADE
+                        );
+                    """))
+                    connection.commit()
+                    print("✅ Created note_images table (SQLite)")
+            else:
+                print(f"Unknown database dialect: {db.engine.dialect.name}")
+        else:
+            print("note_images table already exists")
+            
+    except Exception as e:
+        print(f"Migration 005 failed: {e}")
+        print("note_images table will be created by SQLAlchemy if needed")
+
+def migration_006_add_caption_to_note_images():
+    """Migration 006: Add caption column to note_images table"""
+    from app import db
+    
+    try:
+        # Check if note_images table exists
+        inspector = db.inspect(db.engine)
+        if 'note_images' not in inspector.get_table_names():
+            print("note_images table doesn't exist yet, skipping migration 006")
+            return
+        
+        # Get current table schema
+        columns = [col['name'] for col in inspector.get_columns('note_images')]
+        
+        if 'caption' not in columns:
+            print("Adding caption column to note_images table...")
+            
+            if db.engine.dialect.name == 'postgresql':
+                with db.engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE note_images ADD COLUMN caption TEXT;"))
+                    connection.commit()
+                    print("✅ Added caption column to note_images table (PostgreSQL)")
+                    
+            elif db.engine.dialect.name == 'sqlite':
+                with db.engine.connect() as connection:
+                    connection.execute(text("ALTER TABLE note_images ADD COLUMN caption TEXT;"))
+                    connection.commit()
+                    print("✅ Added caption column to note_images table (SQLite)")
+            else:
+                print(f"Unknown database dialect: {db.engine.dialect.name}")
+        else:
+            print("caption column already exists in note_images table")
+            
+    except Exception as e:
+        print(f"Migration 006 failed: {e}")
+        print("caption column will be created by SQLAlchemy if needed")
 
 def load_sample_data(Currency=None, db=None):
     """Load sample currency data for development with admin notes"""

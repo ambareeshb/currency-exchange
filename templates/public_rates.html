@@ -627,9 +627,9 @@
                                         <h6 class="card-subtitle text-muted">{{ currency.name }}</h6>
                                     </div>
                                     <div class="d-flex align-items-center">
-                                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.admin_notes %}has-notes{% endif %}"
+                                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.has_notes %}has-notes{% endif %}"
                                                 onclick="showCurrencyInfo('{{ currency.id }}')"
-                                                title="{% if currency.admin_notes %}View currency information and notes{% else %}View currency information{% endif %}">
+                                                title="{% if currency.has_notes %}View currency information and notes{% else %}View currency information{% endif %}">
                                             <i class="fas fa-info"></i>
                                         </button>
                                     </div>
@@ -684,9 +684,9 @@
                                         <h6 class="card-subtitle text-muted">{{ currency.name }}</h6>
                                     </div>
                                     <div class="d-flex align-items-center">
-                                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.admin_notes %}has-notes{% endif %}"
+                                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.has_notes %}has-notes{% endif %}"
                                                 onclick="showCurrencyInfo('{{ currency.id }}')"
-                                                title="{% if currency.admin_notes %}View currency information and notes{% else %}View currency information{% endif %}">
+                                                title="{% if currency.has_notes %}View currency information and notes{% else %}View currency information{% endif %}">
                                             <i class="fas fa-info"></i>
                                         </button>
                                     </div>
@@ -784,9 +784,9 @@
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <button type="button" class="btn btn-sm btn-outline-info{% if currency.admin_notes %} has-notes{% endif %}"
+                                            <button type="button" class="btn btn-sm btn-outline-info{% if currency.has_notes %} has-notes{% endif %}"
                                                     onclick="showCurrencyInfo('{{ currency.id }}')"
-                                                    title="{% if currency.admin_notes %}Important information available{% else %}View currency information{% endif %}">
+                                                    title="{% if currency.has_notes %}Important information available{% else %}View currency information{% endif %}">
                                                 <i class="fas fa-info"></i>
                                             </button>
                                         </td>
@@ -962,12 +962,140 @@
                         }
                     }
                     
+                    // Generate images section if images exist
+                    let imagesSection = '';
+                    if (data.images && data.images.length > 0) {
+                        const imageCards = data.images.map(image => {
+                            // Generate timestamp for each image
+                            let imageTimeDisplay = '';
+                            if (image.uploaded_at) {
+                                const relativeTime = getRelativeTime(image.uploaded_at);
+                                const exactTime = formatExactTime(image.uploaded_at);
+                                
+                                if (relativeTime) {
+                                    imageTimeDisplay = `
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-clock me-1"></i>
+                                            <span class="instant-tooltip relative-time" data-timestamp="${image.uploaded_at}" title="${exactTime}" style="cursor: help; text-decoration: underline dotted;">
+                                                ${relativeTime}
+                                            </span>
+                                        </small>
+                                    `;
+                                } else {
+                                    const date = new Date(image.uploaded_at);
+                                    imageTimeDisplay = `
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-clock me-1"></i>
+                                            <span class="instant-tooltip" title="${exactTime}" style="cursor: help; text-decoration: underline dotted;">
+                                                ${date.toLocaleDateString()}
+                                            </span>
+                                        </small>
+                                    `;
+                                }
+                            }
+                            
+                            return `
+                                <div class="col-md-4 mb-3">
+                                    <div class="image-frame" data-image-id="${image.id}" style="
+                                        position: relative;
+                                        border-radius: 12px;
+                                        overflow: hidden;
+                                        background: linear-gradient(145deg, #ffffff, #f8f9fa);
+                                        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+                                        border: 1px solid rgba(255, 255, 255, 0.2);
+                                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                                        cursor: pointer;
+                                        backdrop-filter: blur(10px);
+                                    " onclick="window.open('/uploads/${image.filename}', '_blank')"
+                                    onmouseover="this.style.transform='translateY(-4px) scale(1.02)'; this.style.boxShadow='0 16px 48px rgba(0, 0, 0, 0.12)'"
+                                    onmouseout="this.style.transform='translateY(0) scale(1)'; this.style.boxShadow='0 8px 32px rgba(0, 0, 0, 0.08)'">
+                                        <div style="
+                                            width: 100%;
+                                            height: 160px;
+                                            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+                                            display: flex;
+                                            align-items: center;
+                                            justify-content: center;
+                                            position: relative;
+                                            overflow: hidden;
+                                        ">
+                                            <img src="/uploads/${image.filename}"
+                                                 style="
+                                                     width: 100%;
+                                                     height: 100%;
+                                                     object-fit: cover;
+                                                     transition: all 0.3s ease;
+                                                 "
+                                                 alt="${image.original_filename}"
+                                                 onload="this.style.opacity='1'"
+                                                 style="opacity: 0;">
+                                            <div style="
+                                                position: absolute;
+                                                top: 8px;
+                                                right: 8px;
+                                                background: rgba(0, 0, 0, 0.6);
+                                                color: white;
+                                                padding: 4px 8px;
+                                                border-radius: 12px;
+                                                font-size: 10px;
+                                                font-weight: 600;
+                                                backdrop-filter: blur(10px);
+                                            ">
+                                                ${(image.file_size / 1024).toFixed(0)}KB
+                                            </div>
+                                        </div>
+                                        <div style="
+                                            padding: 12px;
+                                            background: rgba(255, 255, 255, 0.95);
+                                            backdrop-filter: blur(10px);
+                                        ">
+                                            <div style="
+                                                font-size: 12px;
+                                                font-weight: 600;
+                                                color: #495057;
+                                                margin-bottom: 4px;
+                                                white-space: nowrap;
+                                                overflow: hidden;
+                                                text-overflow: ellipsis;
+                                            ">${image.original_filename}</div>
+                                            ${image.caption ? `
+                                                <div style="
+                                                    font-size: 11px;
+                                                    color: #6c757d;
+                                                    font-style: italic;
+                                                    margin-bottom: 4px;
+                                                    line-height: 1.3;
+                                                ">${image.caption}</div>
+                                            ` : ''}
+                                            ${imageTimeDisplay ? `
+                                                <div style="font-size: 10px; color: #adb5bd;">
+                                                    ${imageTimeDisplay.replace('<small class="text-muted d-block">', '').replace('</small>', '')}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                        
+                        imagesSection = `
+                            <div class="mb-3">
+                                <h6><i class="fas fa-image me-2"></i>Attached Images:</h6>
+                                <div class="row">
+                                    ${imageCards}
+                                </div>
+                                <small class="text-muted">Click on images to view full size</small>
+                            </div>
+                        `;
+                    }
+                    
                     body.innerHTML = `
                         <div class="mb-3">
                             <h6><i class="fas fa-sticky-note me-2"></i>Notes:</h6>
                             <p class="text-muted">${data.notes}</p>
                             ${timeFooter}
                         </div>
+                        ${imagesSection}
                         ${data.has_exchange_rates ? `
                         <div class="mb-3">
                             <h6><i class="fas fa-chart-line me-2"></i>Rate Information:</h6>
@@ -1025,6 +1153,49 @@
                 setTimeout(initializeInstantTooltips, 100);
             };
         });
+
+
+        // Toast notification function for public interface
+        function showToastNotification(message, type = 'info') {
+            // Create toast container if it doesn't exist
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '1055';
+                document.body.appendChild(toastContainer);
+            }
+            
+            // Create toast element
+            const toastId = 'toast-' + Date.now();
+            const toastHtml = `
+                <div id="${toastId}" class="toast align-items-center text-white bg-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            
+            // Initialize and show toast
+            const toastElement = document.getElementById(toastId);
+            const toast = new bootstrap.Toast(toastElement, {
+                autohide: true,
+                delay: 3000
+            });
+            toast.show();
+            
+            // Remove toast element after it's hidden
+            toastElement.addEventListener('hidden.bs.toast', function() {
+                toastElement.remove();
+            });
+        }
     </script>
 </body>
 </html>
