@@ -7,30 +7,492 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        /* Modern CSS Variables */
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            --hero-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            --card-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            --card-shadow-hover: 0 25px 50px rgba(0, 0, 0, 0.15);
+            --border-radius: 16px;
+            --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Global smooth transitions */
+        * {
+            transition: var(--transition);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        /* Enhanced Navbar */
+        .navbar {
+            background: var(--primary-gradient) !important;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: none;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
         .navbar-brand {
-            font-weight: bold;
+            font-weight: 800;
+            font-size: 1.6rem;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            letter-spacing: -0.5px;
         }
-        .card {
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+
+        .nav-link {
+            font-weight: 600;
+            border-radius: 12px;
+            margin: 0 6px;
+            padding: 10px 18px !important;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
         }
-        .currency-rate {
-            font-family: 'Courier New', monospace;
-            font-weight: bold;
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            transition: left 0.5s ease;
         }
+
+        .nav-link:hover::before {
+            left: 100%;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Enhanced Hero Section */
         .hero-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: var(--hero-gradient);
             color: white;
-            padding: 60px 0;
+            padding: 80px 0;
+            position: relative;
+            overflow: hidden;
         }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            animation: float 20s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .hero-section .display-4 {
+            font-weight: 800;
+            text-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            letter-spacing: -1px;
+            animation: slideInDown 1s ease-out;
+        }
+
+        .hero-section .lead {
+            font-size: 1.4rem;
+            font-weight: 400;
+            opacity: 0.95;
+            animation: slideInUp 1s ease-out 0.2s both;
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Enhanced Buttons */
+        .btn {
+            border-radius: 14px;
+            font-weight: 700;
+            padding: 16px 32px;
+            border: none;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.95rem;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.6s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+            animation: slideInLeft 1s ease-out 0.4s both;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-success {
+            background: var(--success-gradient);
+            box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+            animation: slideInRight 1s ease-out 0.6s both;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(17, 153, 142, 0.6);
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Enhanced Rate Cards */
         .rate-card {
-            transition: transform 0.2s;
+            border: none;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.95);
+            transition: var(--transition);
+            overflow: hidden;
+            position: relative;
+            animation: fadeInUp 0.8s ease-out;
         }
+
+        .rate-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: var(--primary-gradient);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .rate-card:hover::before {
+            transform: scaleX(1);
+        }
+
         .rate-card:hover {
-            transform: translateY(-5px);
+            box-shadow: var(--card-shadow-hover);
+            transform: translateY(-10px) scale(1.02);
         }
-        .last-updated {
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Enhanced Currency Rates */
+        .currency-rate {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-weight: 800;
+            background: linear-gradient(45deg, #667eea, #764ba2, #f093fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            background-size: 200% 200%;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Enhanced Tables - Eye-friendly design for long focus */
+        .table {
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .table th {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            color: #495057;
+            font-weight: 600;
+            border: none;
+            padding: 1.2rem 1rem;
+            text-transform: none;
+            letter-spacing: 0.2px;
             font-size: 0.9rem;
-            color: #abb4bd;
+            border-bottom: 2px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .table td {
+            padding: 1rem;
+            border-color: rgba(0, 0, 0, 0.04);
+            vertical-align: middle;
+            color: #495057;
+            font-size: 0.9rem;
+        }
+
+        .table tbody tr {
+            transition: background-color 0.2s ease;
+        }
+
+        .table tbody tr:nth-child(even) {
+            background: rgba(248, 249, 250, 0.3);
+        }
+
+        .table tbody tr:hover {
+            background: rgba(102, 126, 234, 0.03);
+            transform: none;
+        }
+
+        /* Subtle currency rate styling for tables */
+        .table .currency-rate {
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-weight: 600;
+            color: #495057;
+            background: none;
+            -webkit-text-fill-color: #495057;
+        }
+
+        /* Muted badge colors for table */
+        .table .badge.bg-success {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%) !important;
+            color: #155724 !important;
+        }
+
+        .table .badge.bg-danger {
+            background: linear-gradient(135deg, #f8d7da 0%, #f1b0b7 100%) !important;
+            color: #721c24 !important;
+        }
+
+        .table .badge.bg-secondary {
+            background: linear-gradient(135deg, #e2e3e5 0%, #d6d8db 100%) !important;
+            color: #383d41 !important;
+        }
+
+        /* Enhanced Badges */
+        .badge {
+            border-radius: 25px;
+            padding: 4px 8px;
+            font-weight: 700;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge.bg-success {
+            background: var(--success-gradient) !important;
+        }
+
+        .badge.bg-danger {
+            background: var(--danger-gradient) !important;
+        }
+
+        /* Eye-friendly card text colors */
+        .card-body .card-title {
+            color: #2c3e50 !important;
+            font-weight: 700;
+        }
+
+        .card-body .card-subtitle {
+            color: #5a6c7d !important;
+            font-weight: 500;
+        }
+
+        .card-body .currency-rate {
+            color: #34495e !important;
+            -webkit-text-fill-color: #34495e !important;
+        }
+
+        .card-body small.text-muted {
+            color: #6c757d !important;
+        }
+
+        /* Enhanced Info Buttons with notification indicator */
+        .btn-outline-info {
+            position: relative;
+            border: 2px solid #17a2b8;
+            color: #17a2b8;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 2px 8px rgba(23, 162, 184, 0.2);
+        }
+
+        .btn-outline-info:hover {
+            background: #17a2b8;
+            color: white;
+            transform: scale(1.15);
+            box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
+        }
+
+        /* Orange notification dot for info button when comments exist */
+        .btn-outline-info.has-notes::after {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 14px;
+            height: 14px;
+            background: linear-gradient(135deg, #ff9500 0%, #ff7b00 100%);
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
+            animation: orange-pulse 2.5s infinite;
+            z-index: 10;
+        }
+
+        /* Enhanced styling for info button when it has notes */
+        .btn-outline-info.has-notes {
+            border-color: #ff9500;
+            color: #ff9500;
+            background: rgba(255, 149, 0, 0.08);
+            box-shadow: 0 0 0 1px rgba(255, 149, 0, 0.15);
+        }
+
+        .btn-outline-info.has-notes:hover {
+            background: #ff9500;
+            color: white;
+            border-color: #ff9500;
+            box-shadow: 0 4px 12px rgba(255, 149, 0, 0.4);
+        }
+
+        @keyframes orange-pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(1.15);
+                box-shadow: 0 0 0 4px rgba(255, 149, 0, 0.2);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+                box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.3);
+            }
+        }
+
+        /* Last Updated Animation */
+        .last-updated {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            animation: pulse 2s infinite;
+        }
+
+        /* Responsive Enhancements */
+        @media (max-width: 768px) {
+            .hero-section {
+                padding: 60px 0;
+            }
+            
+            .hero-section .display-4 {
+                font-size: 2.5rem;
+            }
+            
+            .btn {
+                padding: 14px 28px;
+                font-size: 0.9rem;
+                margin: 8px 0;
+            }
+            
+            .rate-card {
+                margin-bottom: 1.5rem;
+            }
+        }
+
+        /* Loading States */
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
         }
     </style>
 </head>
@@ -85,28 +547,41 @@
                 </h2>
                 <div class="row" id="fromAedContainer">
                     {% for currency in currencies %}
-                    <div class="col-md-6 col-lg-3 mb-4">
-                        <div class="card rate-card border-primary h-100">
-                            <div class="card-body text-center">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h5 class="card-title text-primary mb-0">{{ currency.symbol }}</h5>
-                                    <button type="button" class="btn btn-sm btn-outline-info"
-                                            onclick="showCurrencyInfo({{ currency.id }})"
-                                            title="View currency information">
-                                        <i class="fas fa-info"></i>
-                                    </button>
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h5 class="card-title mb-1">{{ currency.symbol }}</h5>
+                                        <h6 class="card-subtitle text-muted">{{ currency.name }}</h6>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.admin_notes %}has-notes{% endif %}"
+                                                onclick="showCurrencyInfo('{{ currency.id }}')"
+                                                title="{% if currency.admin_notes %}View currency information and notes{% else %}View currency information{% endif %}">
+                                            <i class="fas fa-info"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <h6 class="card-subtitle mb-3 text-muted">{{ currency.name }}</h6>
-                                <div class="display-6 currency-rate text-primary mb-2">
-                                    {{ currency.buying_rate_display if currency.has_exchange_rates else "1.000000 -" }}
+                                
+                                <div class="flex-grow-1 d-flex flex-column justify-content-center">
+                                    <div class="h4 currency-rate text-primary mb-2">
+                                        {% if currency.has_exchange_rates %}
+                                            <div>{{ currency.buying_rate_display }}</div>
+                                        {% else %}
+                                            <div class="text-muted">Contact for rates</div>
+                                        {% endif %}
+                                    </div>
                                 </div>
-                                <small class="text-muted">
-                                    {% if currency.has_exchange_rates %}
-                                        Exchange buys: {{ currency.buying_rate_display }} {{ currency.symbol }}<br><span class="badge bg-success">Live Rate</span>
-                                    {% else %}
-                                        1 AED = {{ currency.buying_rate_display }} {{ currency.symbol }}<br><span class="badge bg-secondary">Reference</span>
-                                    {% endif %}
-                                </small>
+                                <div class="mt-auto">
+                                    <small class="text-muted">
+                                        {% if currency.has_exchange_rates %}
+                                            {{ currency.buying_rate_display }} {{ currency.symbol }}<br><span class="badge bg-success">Live Rate</span>
+                                        {% else %}
+                                            <span class="text-muted">Rates on request</span>
+                                        {% endif %}
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -124,28 +599,41 @@
                 </h2>
                 <div class="row" id="toAedContainer">
                     {% for currency in currencies %}
-                    <div class="col-md-6 col-lg-3 mb-4">
-                        <div class="card rate-card border-success h-100">
-                            <div class="card-body text-center">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <h5 class="card-title text-success mb-0">{{ currency.symbol }}</h5>
-                                    <button type="button" class="btn btn-sm btn-outline-info"
-                                            onclick="showCurrencyInfo({{ currency.id }})"
-                                            title="View currency information">
-                                        <i class="fas fa-info"></i>
-                                    </button>
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                    <div>
+                                        <h5 class="card-title mb-1">{{ currency.symbol }}</h5>
+                                        <h6 class="card-subtitle text-muted">{{ currency.name }}</h6>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.admin_notes %}has-notes{% endif %}"
+                                                onclick="showCurrencyInfo('{{ currency.id }}')"
+                                                title="{% if currency.admin_notes %}View currency information and notes{% else %}View currency information{% endif %}">
+                                            <i class="fas fa-info"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <h6 class="card-subtitle mb-3 text-muted">{{ currency.name }}</h6>
-                                <div class="display-6 currency-rate text-success mb-2">
-                                    {{ currency.selling_from_aed_display if currency.has_exchange_rates else "No rate" }}
+                                
+                                <div class="flex-grow-1 d-flex flex-column justify-content-center">
+                                    <div class="h4 currency-rate text-success mb-2">
+                                        {% if currency.has_exchange_rates %}
+                                            <div>{{ currency.selling_from_aed_display }}</div>
+                                        {% else %}
+                                            <div class="text-muted">Contact for rates</div>
+                                        {% endif %}
+                                    </div>
                                 </div>
-                                <small class="text-muted">
-                                    {% if currency.has_exchange_rates %}
-                                        Exchange sells: {{ currency.selling_from_aed_display }} AED<br><span class="badge bg-danger">Live Rate</span>
-                                    {% else %}
-                                        1 {{ currency.symbol }} = {{ currency.selling_from_aed_display }} AED<br><span class="badge bg-secondary">Reference</span>
-                                    {% endif %}
-                                </small>
+                                <div class="mt-auto">
+                                    <small class="text-muted">
+                                        {% if currency.has_exchange_rates %}
+                                            {{ currency.selling_from_aed_display }} AED<br><span class="badge bg-danger">Live Rate</span>
+                                        {% else %}
+                                            <span class="text-muted">Rates on request</span>
+                                        {% endif %}
+                                    </small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -170,10 +658,10 @@
                                     <tr>
                                         <th>Currency</th>
                                         <th>Symbol</th>
-                                        <th>Exchange Buys (1 AED =)</th>
-                                        <th>Exchange Sells (1 Unit = AED)</th>
-                                        <th>Exchange Buys (10 AED =)</th>
-                                        <th>Exchange Sells (100 Units = AED)</th>
+                                        <th>Buying (1 AED =)</th>
+                                        <th>Selling (1 Unit = AED)</th>
+                                        <th>Buying (10 AED =)</th>
+                                        <th>Selling (100 Units = AED)</th>
                                         <th>Info</th>
                                     </tr>
                                 </thead>
@@ -185,19 +673,15 @@
                                         <td class="currency-rate">
                                             {% if currency.has_exchange_rates %}
                                                 <span class="text-success">{{ currency.buying_rate_display }}</span>
-                                                <small class="text-muted d-block">We buy at this rate</small>
                                             {% else %}
                                                 <span class="text-muted">No rate set</span>
-                                                <small class="text-muted d-block">Reference rate</small>
                                             {% endif %}
                                         </td>
                                         <td class="currency-rate">
                                             {% if currency.has_exchange_rates %}
                                                 <span class="text-danger">{{ currency.selling_from_aed_display }}</span>
-                                                <small class="text-muted d-block">We sell at this rate</small>
                                             {% else %}
                                                 <span class="text-muted">No rate set</span>
-                                                <small class="text-muted d-block">Reference rate</small>
                                             {% endif %}
                                         </td>
                                         <td class="currency-rate">
@@ -207,10 +691,8 @@
                                                 {% else %}
                                                     <span class="text-muted">No rate set</span>
                                                 {% endif %}
-                                                <small class="text-muted d-block">We buy 10 AED</small>
                                             {% else %}
                                                 <span class="text-muted">No rate set</span>
-                                                <small class="text-muted d-block">Reference rate</small>
                                             {% endif %}
                                         </td>
                                         <td class="currency-rate">
@@ -220,16 +702,14 @@
                                                 {% else %}
                                                     <span class="text-muted">No rate set</span>
                                                 {% endif %}
-                                                <small class="text-muted d-block">We sell 100 units</small>
                                             {% else %}
                                                 <span class="text-muted">No rate set</span>
-                                                <small class="text-muted d-block">Reference rate</small>
                                             {% endif %}
                                         </td>
                                         <td>
-                                            <button type="button" class="btn btn-sm btn-outline-info"
-                                                    onclick="showCurrencyInfo({{ currency.id }})"
-                                                    title="View currency information">
+                                            <button type="button" class="btn btn-sm btn-outline-info{% if currency.admin_notes %} has-notes{% endif %}"
+                                                    onclick="showCurrencyInfo('{{ currency.id }}')"
+                                                    title="{% if currency.admin_notes %}Important information available{% else %}View currency information{% endif %}">
                                                 <i class="fas fa-info"></i>
                                             </button>
                                         </td>

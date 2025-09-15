@@ -350,12 +350,12 @@ def delete_currency(currency_id):
 @app.route('/buying')
 def buying():
     currencies = Currency.query.order_by(Currency.symbol.asc()).all()
-    return render_template('from_aed.html', currencies=currencies)
+    return render_template('buying.html', currencies=currencies)
 
 @app.route('/selling')
 def selling():
     currencies = Currency.query.order_by(Currency.symbol.asc()).all()
-    return render_template('to_aed.html', currencies=currencies)
+    return render_template('selling.html', currencies=currencies)
 
 @app.route('/currency_notes/<int:currency_id>')
 def get_currency_notes(currency_id):
@@ -395,8 +395,13 @@ def health_check():
         }, 503
 
 def init_db_and_migrations():
-    from migrations import run_migrations
+    from migrations import run_migrations, load_sample_data
     run_migrations()
+    
+    # Load sample data if in development mode
+    if os.environ.get('LOAD_SAMPLE_DATA', 'false').lower() == 'true':
+        with app.app_context():
+            load_sample_data(Currency, db)
 
 if __name__ == '__main__':
     print("Starting Currency Exchange Application...")

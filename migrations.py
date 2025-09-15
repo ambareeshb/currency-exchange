@@ -244,29 +244,71 @@ def migration_004_remove_old_rate_column():
         print(f"Migration 004 failed: {e}")
         print("This may be expected if the old column doesn't exist")
 
-def load_sample_data():
-    """Load sample currency data for development"""
-    from app import Currency
+def load_sample_data(Currency=None, db=None):
+    """Load sample currency data for development with admin notes"""
+    if Currency is None or db is None:
+        from app import Currency, db
+    
+    # Only load sample data in development environment
+    if os.environ.get('DEBUG', 'false').lower() != 'true':
+        print("Skipping sample data load - not in development mode")
+        return
     
     if Currency.query.count() == 0:
         sample_currencies = [
+            # Currency with admin notes (will show notification indicator)
             Currency(name='US Dollar', symbol='USD',
                     min_buying_rate_to_aed=3.65, max_buying_rate_to_aed=3.67,
-                    min_selling_rate_to_aed=3.68, max_selling_rate_to_aed=3.70),
+                    min_selling_rate_to_aed=3.68, max_selling_rate_to_aed=3.70,
+                    admin_notes='⚠️ High volatility expected this week due to Federal Reserve meeting. Monitor rates closely for optimal exchange timing.'),
+            
+            # Currency without admin notes (no notification indicator)
             Currency(name='Euro', symbol='EUR',
                     min_buying_rate_to_aed=3.95, max_buying_rate_to_aed=3.97,
                     min_selling_rate_to_aed=4.00, max_selling_rate_to_aed=4.02),
+            
+            # Currency with admin notes (will show notification indicator)
             Currency(name='British Pound', symbol='GBP',
                     min_buying_rate_to_aed=4.50, max_buying_rate_to_aed=4.52,
-                    min_selling_rate_to_aed=4.55, max_selling_rate_to_aed=4.57),
+                    min_selling_rate_to_aed=4.55, max_selling_rate_to_aed=4.57,
+                    admin_notes='📈 Brexit-related fluctuations possible. Current rates are favorable for buying GBP.'),
+            
+            # Currency without admin notes (no notification indicator)
             Currency(name='Japanese Yen', symbol='JPY',
                     min_buying_rate_to_aed=0.025, max_buying_rate_to_aed=0.027,
                     min_selling_rate_to_aed=0.028, max_selling_rate_to_aed=0.030),
+            
+            # Currency with admin notes (will show notification indicator)
+            Currency(name='Canadian Dollar', symbol='CAD',
+                    min_buying_rate_to_aed=2.70, max_buying_rate_to_aed=2.72,
+                    min_selling_rate_to_aed=2.75, max_selling_rate_to_aed=2.77,
+                    admin_notes='🛢️ Oil price changes affecting CAD rates. Best rates available for bulk exchanges over 10,000 AED.'),
+            
+            # Currency without admin notes (no notification indicator)
+            Currency(name='Swiss Franc', symbol='CHF',
+                    min_buying_rate_to_aed=4.10, max_buying_rate_to_aed=4.12,
+                    min_selling_rate_to_aed=4.15, max_selling_rate_to_aed=4.17),
+            
+            # Currency with admin notes (will show notification indicator)
+            Currency(name='Australian Dollar', symbol='AUD',
+                    min_buying_rate_to_aed=2.45, max_buying_rate_to_aed=2.47,
+                    min_selling_rate_to_aed=2.50, max_selling_rate_to_aed=2.52,
+                    admin_notes='🏦 Special promotion: 0.02 AED better rate for exchanges above 5,000 AED until end of month.'),
+            
+            # Currency without admin notes (no notification indicator)
+            Currency(name='Singapore Dollar', symbol='SGD',
+                    min_buying_rate_to_aed=2.68, max_buying_rate_to_aed=2.70,
+                    min_selling_rate_to_aed=2.73, max_selling_rate_to_aed=2.75),
         ]
+        
         for currency in sample_currencies:
             db.session.add(currency)
         db.session.commit()
-        print("Sample currency data loaded")
+        print("✅ Sample currency data loaded with admin notes for development testing")
+        print("   - Currencies with notes (notification indicator): USD, GBP, CAD, AUD")
+        print("   - Currencies without notes (no indicator): EUR, JPY, CHF, SGD")
+    else:
+        print("Sample data already exists, skipping load")
 
 if __name__ == '__main__':
     # Load environment variables from production file
