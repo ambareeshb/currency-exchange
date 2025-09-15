@@ -576,8 +576,77 @@ with app.app_context():
 
 # Start/restart services gracefully
 print_status "Starting/restarting services..."
+
+# Check application service status before restart
+print_status "Checking current service status..."
+sudo systemctl status $SERVICE_NAME --no-pager -l || true
+
+# Check if application files are in place
+print_status "Verifying application files..."
+if [ ! -f "$APP_DIR/app.py" ]; then
+    print_error "app.py not found in $APP_DIR"
+    exit 1
+fi
+
+if [ ! -f "$APP_DIR/.env.production" ]; then
+    print_error ".env.production not found in $APP_DIR"
+    exit 1
+fi
+
+if [ ! -d "$APP_DIR/venv" ]; then
+    print_error "Virtual environment not found in $APP_DIR"
+    exit 1
+fi
+
+# Test if the application can start manually first
+print_status "Testing application startup..."
+cd $APP_DIR
+source venv/bin/activate
+set -a
+source .env.production
+set +a
+
+# Quick test to see if app imports correctly
+python -c "
+try:
+    from app import app
+    print('✅ Application imports successfully')
+except Exception as e:
+    print(f'❌ Application import failed: {e}')
+    exit(1)
+" || {
+    print_error "Application failed to import. Check dependencies and code."
+    exit 1
+}
+
+# Check if port 5001 is already in use
+if netstat -tuln | grep -q ":5001 "; then
+    print_warning "Port 5001 is already in use. Stopping existing processes..."
+    sudo pkill -f "gunicorn.*app:app" || true
+    sleep 2
+fi
+
 graceful_service_restart $SERVICE_NAME
 graceful_service_restart nginx
+
+# Enhanced verification with detailed logging
+print_status "Enhanced deployment verification..."
+
+# Check service status with detailed output
+print_status "Service status check:"
+sudo systemctl status $SERVICE_NAME --no-pager -l
+
+# Check if the service is listening on port 5001
+print_status "Checking if application is listening on port 5001..."
+sleep 5
+if netstat -tuln | grep -q ":5001 "; then
+    print_status "✅ Application is listening on port 5001"
+else
+    print_error "❌ Application is not listening on port 5001"
+    print_status "Recent application logs:"
+    sudo journalctl -u $SERVICE_NAME --no-pager -n 20
+    exit 1
+fi
 
 # Verify deployment
 verify_deployment
