@@ -520,6 +520,15 @@ else
     print_status "Updating dependencies..."
     pip install --upgrade pip
     pip install -r requirements.txt
+    
+    # Update Nginx configuration during updates to apply any config changes
+    print_status "Updating Nginx configuration..."
+    # Check if domain was previously configured
+    EXISTING_DOMAIN=""
+    if [ -f "/etc/nginx/conf.d/$SERVICE_NAME.conf" ]; then
+        EXISTING_DOMAIN=$(grep -o 'server_name [^;]*' /etc/nginx/conf.d/$SERVICE_NAME.conf | head -1 | awk '{print $2}' | grep -v '_' || echo "")
+    fi
+    create_nginx_config "$EXISTING_DOMAIN"
 fi
 
 # Common steps for both setup and update
