@@ -389,6 +389,43 @@
                 font-size: 1.25rem;
             }
         }
+
+        /* Make tooltips appear immediately without delay */
+        .instant-tooltip {
+            position: relative;
+        }
+
+        /* Override browser default tooltip delay */
+        .instant-tooltip[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s ease-in;
+        }
+
+        .instant-tooltip[title]:hover::after {
+            opacity: 1;
+        }
+
+        /* Hide default browser tooltip */
+        .instant-tooltip[title] {
+            position: relative;
+        }
+
+        .instant-tooltip[title]:hover {
+            overflow: visible;
+        }
     </style>
 </head>
 <body>
@@ -399,6 +436,9 @@
             </a>
             {% if current_user.is_authenticated %}
             <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('index') }}">
+                    <i class="fas fa-home me-1"></i>Home
+                </a>
                 <a class="nav-link" href="{{ url_for('dashboard') }}">
                     <i class="fas fa-tachometer-alt me-1"></i>Dashboard
                 </a>
@@ -523,6 +563,93 @@
                     `;
                 });
         }
+
+        // Relative time utility functions for base template
+        function getRelativeTime(dateString) {
+            if (!dateString) return null;
+            
+            const now = new Date();
+            // Ensure the date string is properly parsed as UTC
+            let date;
+            if (dateString.endsWith('Z') || dateString.includes('+') || (dateString.includes('T') && dateString.includes(':'))) {
+                // Already has timezone info
+                date = new Date(dateString);
+            } else {
+                // Assume UTC if no timezone info
+                date = new Date(dateString + 'Z');
+            }
+            
+            const diffInSeconds = Math.floor((now - date) / 1000);
+            
+            if (diffInSeconds < 60) {
+                return diffInSeconds <= 1 ? '1 second ago' : `${diffInSeconds} seconds ago`;
+            }
+            
+            const diffInMinutes = Math.floor(diffInSeconds / 60);
+            if (diffInMinutes < 60) {
+                return diffInMinutes === 1 ? '1 minute ago' : `${diffInMinutes} minutes ago`;
+            }
+            
+            const diffInHours = Math.floor(diffInMinutes / 60);
+            if (diffInHours < 24) {
+                return diffInHours === 1 ? '1 hour ago' : `${diffInHours} hours ago`;
+            }
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            if (diffInDays <= 4) {
+                return diffInDays === 1 ? '1 day ago' : `${diffInDays} days ago`;
+            }
+            
+            // For dates older than 4 days, return null to show exact date
+            return null;
+        }
+
+        function formatExactTime(dateString) {
+            if (!dateString) return 'No timestamp available';
+            
+            // Ensure the date string is properly parsed as UTC
+            let date;
+            if (dateString.endsWith('Z') || dateString.includes('+') || (dateString.includes('T') && dateString.includes(':'))) {
+                // Already has timezone info
+                date = new Date(dateString);
+            } else {
+                // Assume UTC if no timezone info
+                date = new Date(dateString + 'Z');
+            }
+            
+            return date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+            });
+        }
+
+        // Initialize instant tooltips
+        function initializeInstantTooltips() {
+            const relativeTimeElements = document.querySelectorAll('.instant-tooltip[title]');
+            relativeTimeElements.forEach(element => {
+                // Add CSS class for immediate tooltip display
+                element.classList.add('instant-tooltip');
+                
+                // Update title on mouse enter to ensure it's current
+                element.addEventListener('mouseenter', function() {
+                    const timestamp = element.getAttribute('data-timestamp');
+                    if (timestamp) {
+                        const exactTime = formatExactTime(timestamp);
+                        element.setAttribute('title', exactTime);
+                    }
+                });
+            });
+        }
+
+        // Initialize tooltips when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeInstantTooltips();
+        });
     </script>
     {% block scripts %}{% endblock %}
 </body>

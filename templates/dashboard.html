@@ -124,7 +124,7 @@
                                                 <small class="text-muted"
                                                        title="{{ currency.notes_updated_at.strftime('%B %d, %Y at %I:%M:%S %p UTC') }}"
                                                        style="cursor: help;">
-                                                    <span class="relative-time" data-timestamp="{{ currency.notes_updated_at.isoformat() }}">
+                                                    <span class="relative-time" data-timestamp="{{ currency.notes_updated_at.isoformat() }}Z">
                                                         <!-- Will be populated by JavaScript -->
                                                     </span>
                                                 </small>
@@ -260,6 +260,45 @@
 </div>
 {% endfor %}
 
+<style>
+/* Make tooltips appear immediately without delay */
+.instant-tooltip {
+    position: relative;
+}
+
+/* Override browser default tooltip delay */
+.instant-tooltip[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    z-index: 1000;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.1s ease-in;
+}
+
+.instant-tooltip[title]:hover::after {
+    opacity: 1;
+}
+
+/* Hide default browser tooltip */
+.instant-tooltip[title] {
+    position: relative;
+}
+
+.instant-tooltip[title]:hover {
+    overflow: visible;
+}
+</style>
+
 <script>
 // Relative time utility functions
 function getRelativeTime(dateString) {
@@ -268,7 +307,7 @@ function getRelativeTime(dateString) {
     const now = new Date();
     // Ensure the date string is properly parsed as UTC
     let date;
-    if (dateString.endsWith('Z') || dateString.includes('+') || dateString.includes('T') && dateString.includes(':')) {
+    if (dateString.endsWith('Z') || dateString.includes('+') || (dateString.includes('T') && dateString.includes(':'))) {
         // Already has timezone info
         date = new Date(dateString);
     } else {
@@ -306,7 +345,7 @@ function formatExactTime(dateString) {
     
     // Ensure the date string is properly parsed as UTC
     let date;
-    if (dateString.endsWith('Z') || dateString.includes('+') || dateString.includes('T') && dateString.includes(':')) {
+    if (dateString.endsWith('Z') || dateString.includes('+') || (dateString.includes('T') && dateString.includes(':'))) {
         // Already has timezone info
         date = new Date(dateString);
     } else {
@@ -352,6 +391,25 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update every minute
     setInterval(updateRelativeTimes, 60000);
+    
+    // Make tooltips appear immediately using CSS and proper event handling
+    const relativeTimeElements = document.querySelectorAll('.relative-time[title]');
+    relativeTimeElements.forEach(element => {
+        // Add CSS class for immediate tooltip display
+        element.classList.add('instant-tooltip');
+        
+        // Store original title for reference
+        const originalTitle = element.getAttribute('title');
+        
+        // Update title on mouse enter to ensure it's current
+        element.addEventListener('mouseenter', function() {
+            const timestamp = element.getAttribute('data-timestamp');
+            if (timestamp) {
+                const exactTime = formatExactTime(timestamp);
+                element.setAttribute('title', exactTime);
+            }
+        });
+    });
 });
 </script>
 
