@@ -137,6 +137,8 @@ def migration_003_add_currency_fields():
                 columns_to_add.append('min_selling_rate_to_aed')
             if 'max_selling_rate_to_aed' not in columns:
                 columns_to_add.append('max_selling_rate_to_aed')
+            if 'notes_updated_at' not in columns:
+                columns_to_add.append('notes_updated_at')
             
             if columns_to_add:
                 print(f"Adding columns to currency table: {columns_to_add}")
@@ -153,6 +155,8 @@ def migration_003_add_currency_fields():
                             connection.execute(text("ALTER TABLE currency ADD COLUMN min_selling_rate_to_aed FLOAT;"))
                         if 'max_selling_rate_to_aed' in columns_to_add:
                             connection.execute(text("ALTER TABLE currency ADD COLUMN max_selling_rate_to_aed FLOAT;"))
+                        if 'notes_updated_at' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN notes_updated_at TIMESTAMP;"))
                         
                         connection.commit()
                         print("✅ Updated currency table columns (PostgreSQL)")
@@ -169,6 +173,8 @@ def migration_003_add_currency_fields():
                             connection.execute(text("ALTER TABLE currency ADD COLUMN min_selling_rate_to_aed REAL;"))
                         if 'max_selling_rate_to_aed' in columns_to_add:
                             connection.execute(text("ALTER TABLE currency ADD COLUMN max_selling_rate_to_aed REAL;"))
+                        if 'notes_updated_at' in columns_to_add:
+                            connection.execute(text("ALTER TABLE currency ADD COLUMN notes_updated_at DATETIME;"))
                         
                         connection.commit()
                         print("✅ Updated currency table columns (SQLite)")
@@ -255,12 +261,18 @@ def load_sample_data(Currency=None, db=None):
         return
     
     if Currency.query.count() == 0:
+        from datetime import datetime, timedelta
+        
+        # Create timestamps for different currencies (simulating different add times)
+        now = datetime.utcnow()
+        
         sample_currencies = [
             # Currency with admin notes (will show notification indicator)
             Currency(name='US Dollar', symbol='USD',
                     min_buying_rate_to_aed=3.65, max_buying_rate_to_aed=3.67,
                     min_selling_rate_to_aed=3.68, max_selling_rate_to_aed=3.70,
-                    admin_notes='⚠️ High volatility expected this week due to Federal Reserve meeting. Monitor rates closely for optimal exchange timing.'),
+                    admin_notes='⚠️ High volatility expected this week due to Federal Reserve meeting. Monitor rates closely for optimal exchange timing.',
+                    notes_updated_at=now - timedelta(minutes=30)),
             
             # Currency without admin notes (no notification indicator)
             Currency(name='Euro', symbol='EUR',
@@ -271,7 +283,8 @@ def load_sample_data(Currency=None, db=None):
             Currency(name='British Pound', symbol='GBP',
                     min_buying_rate_to_aed=4.50, max_buying_rate_to_aed=4.52,
                     min_selling_rate_to_aed=4.55, max_selling_rate_to_aed=4.57,
-                    admin_notes='📈 Brexit-related fluctuations possible. Current rates are favorable for buying GBP.'),
+                    admin_notes='📈 Brexit-related fluctuations possible. Current rates are favorable for buying GBP.',
+                    notes_updated_at=now - timedelta(hours=2)),
             
             # Currency without admin notes (no notification indicator)
             Currency(name='Japanese Yen', symbol='JPY',
@@ -282,7 +295,8 @@ def load_sample_data(Currency=None, db=None):
             Currency(name='Canadian Dollar', symbol='CAD',
                     min_buying_rate_to_aed=2.70, max_buying_rate_to_aed=2.72,
                     min_selling_rate_to_aed=2.75, max_selling_rate_to_aed=2.77,
-                    admin_notes='🛢️ Oil price changes affecting CAD rates. Best rates available for bulk exchanges over 10,000 AED.'),
+                    admin_notes='🛢️ Oil price changes affecting CAD rates. Best rates available for bulk exchanges over 10,000 AED.',
+                    notes_updated_at=now - timedelta(days=1)),
             
             # Currency without admin notes (no notification indicator)
             Currency(name='Swiss Franc', symbol='CHF',
@@ -293,7 +307,8 @@ def load_sample_data(Currency=None, db=None):
             Currency(name='Australian Dollar', symbol='AUD',
                     min_buying_rate_to_aed=2.45, max_buying_rate_to_aed=2.47,
                     min_selling_rate_to_aed=2.50, max_selling_rate_to_aed=2.52,
-                    admin_notes='🏦 Special promotion: 0.02 AED better rate for exchanges above 5,000 AED until end of month.'),
+                    admin_notes='🏦 Special promotion: 0.02 AED better rate for exchanges above 5,000 AED until end of month.',
+                    notes_updated_at=now - timedelta(days=3)),
             
             # Currency without admin notes (no notification indicator)
             Currency(name='Singapore Dollar', symbol='SGD',

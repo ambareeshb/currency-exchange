@@ -118,7 +118,18 @@
                                 </td>
                                 <td>
                                     {% if currency.admin_notes %}
-                                        <i class="fas fa-sticky-note text-info" title="Has notes"></i>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-sticky-note text-info me-2" title="Has notes"></i>
+                                            {% if currency.notes_updated_at %}
+                                                <small class="text-muted"
+                                                       title="{{ currency.notes_updated_at.strftime('%B %d, %Y at %I:%M:%S %p UTC') }}"
+                                                       style="cursor: help;">
+                                                    <span class="relative-time" data-timestamp="{{ currency.notes_updated_at.isoformat() }}">
+                                                        <!-- Will be populated by JavaScript -->
+                                                    </span>
+                                                </small>
+                                            {% endif %}
+                                        </div>
                                     {% else %}
                                         <i class="fas fa-sticky-note text-muted" title="No notes"></i>
                                     {% endif %}
@@ -248,4 +259,100 @@
     </div>
 </div>
 {% endfor %}
+
+<script>
+// Relative time utility functions
+function getRelativeTime(dateString) {
+    if (!dateString) return null;
+    
+    const now = new Date();
+    // Ensure the date string is properly parsed as UTC
+    let date;
+    if (dateString.endsWith('Z') || dateString.includes('+') || dateString.includes('T') && dateString.includes(':')) {
+        // Already has timezone info
+        date = new Date(dateString);
+    } else {
+        // Assume UTC if no timezone info
+        date = new Date(dateString + 'Z');
+    }
+    
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) {
+        return diffInSeconds <= 1 ? '1 second ago' : `${diffInSeconds} seconds ago`;
+    }
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) {
+        return diffInMinutes === 1 ? '1 minute ago' : `${diffInMinutes} minutes ago`;
+    }
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) {
+        return diffInHours === 1 ? '1 hour ago' : `${diffInHours} hours ago`;
+    }
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays <= 4) {
+        return diffInDays === 1 ? '1 day ago' : `${diffInDays} days ago`;
+    }
+    
+    // For dates older than 4 days, return null to show exact date
+    return null;
+}
+
+function formatExactTime(dateString) {
+    if (!dateString) return 'No timestamp available';
+    
+    // Ensure the date string is properly parsed as UTC
+    let date;
+    if (dateString.endsWith('Z') || dateString.includes('+') || dateString.includes('T') && dateString.includes(':')) {
+        // Already has timezone info
+        date = new Date(dateString);
+    } else {
+        // Assume UTC if no timezone info
+        date = new Date(dateString + 'Z');
+    }
+    
+    return date.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+    });
+}
+
+// Update relative time displays
+function updateRelativeTimes() {
+    document.querySelectorAll('.relative-time').forEach(element => {
+        const timestamp = element.getAttribute('data-timestamp');
+        if (timestamp) {
+            const relativeTime = getRelativeTime(timestamp);
+            const exactTime = formatExactTime(timestamp);
+            
+            if (relativeTime) {
+                element.textContent = relativeTime;
+                element.setAttribute('title', exactTime);
+            } else {
+                // For dates older than 4 days, show the exact date
+                const date = new Date(timestamp);
+                element.textContent = date.toLocaleDateString();
+                element.setAttribute('title', exactTime);
+            }
+        }
+    });
+}
+
+// Initialize relative times when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    updateRelativeTimes();
+    
+    // Update every minute
+    setInterval(updateRelativeTimes, 60000);
+});
+</script>
+
 {% endblock %}

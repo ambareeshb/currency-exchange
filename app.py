@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 import os
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -108,6 +109,7 @@ class Currency(db.Model):
     min_selling_rate_to_aed = db.Column(db.Float, nullable=True)
     max_selling_rate_to_aed = db.Column(db.Float, nullable=True)
     admin_notes = db.Column(db.Text, nullable=True)
+    notes_updated_at = db.Column(db.DateTime, nullable=True)
     
     def __repr__(self):
         return f'<Currency {self.symbol}: {self.name}>'
@@ -283,7 +285,8 @@ def add_currency():
         max_buying_rate_to_aed=max_buying_rate,
         min_selling_rate_to_aed=min_selling_rate,
         max_selling_rate_to_aed=max_selling_rate,
-        admin_notes=admin_notes if admin_notes else None
+        admin_notes=admin_notes if admin_notes else None,
+        notes_updated_at=datetime.now(timezone.utc) if admin_notes else None
     )
     db.session.add(currency)
     db.session.commit()
@@ -296,7 +299,16 @@ def add_currency():
 def update_currency(currency_id):
     currency = Currency.query.get_or_404(currency_id)
     currency.name = request.form['name']
-    currency.admin_notes = request.form.get('admin_notes', '').strip() or None
+    
+    # Get the new admin notes
+    new_admin_notes = request.form.get('admin_notes', '').strip() or None
+    
+    # Check if notes have changed and update timestamp accordingly
+    if new_admin_notes != currency.admin_notes:
+        currency.admin_notes = new_admin_notes
+        currency.notes_updated_at = datetime.now(timezone.utc) if new_admin_notes else None
+    else:
+        currency.admin_notes = new_admin_notes
     
     # Handle buying rate range
     if request.form.get('min_buying_rate_to_aed') and request.form.get('max_buying_rate_to_aed'):
@@ -365,6 +377,7 @@ def get_currency_notes(currency_id):
         'symbol': currency.symbol,
         'name': currency.name,
         'notes': currency.admin_notes or 'No notes available for this currency.',
+        'notes_updated_at': currency.notes_updated_at.isoformat() + 'Z' if currency.notes_updated_at else None,
         'has_exchange_rates': currency.has_exchange_rates,
         'buying_rate_display': currency.buying_rate_display,
         'selling_rate_display': currency.selling_rate_display,

@@ -494,6 +494,48 @@
             0% { background-position: -200% 0; }
             100% { background-position: 200% 0; }
         }
+
+        /* Enhanced Admin Button */
+        .admin-btn {
+            background: rgba(255, 255, 255, 0.15) !important;
+            border: 2px solid rgba(255, 255, 255, 0.3) !important;
+            border-radius: 25px !important;
+            backdrop-filter: blur(10px) !important;
+            transition: all 0.3s ease !important;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .admin-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .admin-btn:hover::before {
+            left: 100%;
+        }
+
+        .admin-btn:hover {
+            background: rgba(255, 255, 255, 0.25) !important;
+            border-color: rgba(255, 255, 255, 0.5) !important;
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 8px 25px rgba(255, 255, 255, 0.2);
+        }
+
+        .admin-btn i {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -509,8 +551,8 @@
                 <a class="nav-link" href="/selling">
                     <i class="fas fa-arrow-left me-1"></i>Selling Rates
                 </a>
-                <a class="nav-link" href="/admin">
-                    <i class="fas fa-cog me-1"></i>Admin
+                <a class="nav-link admin-btn" href="/admin">
+                    <i class="fas fa-user-shield me-1"></i>Admin
                 </a>
             </div>
         </div>
@@ -541,10 +583,14 @@
         <!-- Buy Section -->
         <div class="row mb-5">
             <div class="col-12">
-                <h2 class="text-center mb-4">
-                    <i class="fas fa-arrow-right me-2 text-primary"></i>Buy
-                    <small class="text-muted d-block mt-2">1 AED equals</small>
-                </h2>
+                <div class="card rate-card mb-4">
+                    <div class="card-header text-center" style="background: linear-gradient(135deg, #e8f5e8 0%, #d4edda 100%); color: #155724; border: none;">
+                        <h2 class="mb-0">
+                            <i class="fas fa-arrow-right me-2"></i>Buying Rates
+                            <small class="d-block mt-2" style="opacity: 0.8; font-size: 0.9rem;">1 AED equals</small>
+                        </h2>
+                    </div>
+                    <div class="card-body">
                 <div class="row" id="fromAedContainer">
                     {% for currency in currencies %}
                     <div class="col-md-6 col-lg-4 mb-4">
@@ -586,6 +632,7 @@
                         </div>
                     </div>
                     {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -593,10 +640,14 @@
         <!-- Sell Section -->
         <div class="row mb-5">
             <div class="col-12">
-                <h2 class="text-center mb-4">
-                    <i class="fas fa-arrow-left me-2 text-success"></i>Sell
-                    <small class="text-muted d-block mt-2">1 unit equals</small>
-                </h2>
+                <div class="card rate-card mb-4">
+                    <div class="card-header text-center" style="background: linear-gradient(135deg, #f8e6e6 0%, #f5c6cb 100%); color: #721c24; border: none;">
+                        <h2 class="mb-0">
+                            <i class="fas fa-arrow-left me-2"></i>Selling Rates
+                            <small class="d-block mt-2" style="opacity: 0.8; font-size: 0.9rem;">1 unit equals</small>
+                        </h2>
+                    </div>
+                    <div class="card-body">
                 <div class="row" id="toAedContainer">
                     {% for currency in currencies %}
                     <div class="col-md-6 col-lg-4 mb-4">
@@ -638,6 +689,7 @@
                         </div>
                     </div>
                     {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -653,8 +705,8 @@
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-striped table-hover">
-                                <thead class="table-dark">
+                            <table class="table table-hover">
+                                <thead>
                                     <tr>
                                         <th>Currency</th>
                                         <th>Symbol</th>
@@ -769,6 +821,70 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Relative time utility functions
+        function getRelativeTime(dateString) {
+            if (!dateString) return null;
+            
+            const now = new Date();
+            // Ensure the date string is properly parsed as UTC
+            let date;
+            if (dateString.endsWith('Z') || dateString.includes('+') || dateString.includes('T') && dateString.includes(':')) {
+                // Already has timezone info
+                date = new Date(dateString);
+            } else {
+                // Assume UTC if no timezone info
+                date = new Date(dateString + 'Z');
+            }
+            
+            const diffInSeconds = Math.floor((now - date) / 1000);
+            
+            if (diffInSeconds < 60) {
+                return diffInSeconds <= 1 ? '1 second ago' : `${diffInSeconds} seconds ago`;
+            }
+            
+            const diffInMinutes = Math.floor(diffInSeconds / 60);
+            if (diffInMinutes < 60) {
+                return diffInMinutes === 1 ? '1 minute ago' : `${diffInMinutes} minutes ago`;
+            }
+            
+            const diffInHours = Math.floor(diffInMinutes / 60);
+            if (diffInHours < 24) {
+                return diffInHours === 1 ? '1 hour ago' : `${diffInHours} hours ago`;
+            }
+            
+            const diffInDays = Math.floor(diffInHours / 24);
+            if (diffInDays <= 4) {
+                return diffInDays === 1 ? '1 day ago' : `${diffInDays} days ago`;
+            }
+            
+            // For dates older than 4 days, return null to show exact date
+            return null;
+        }
+        
+        function formatExactTime(dateString) {
+            if (!dateString) return 'No timestamp available';
+            
+            // Ensure the date string is properly parsed as UTC
+            let date;
+            if (dateString.endsWith('Z') || dateString.includes('+') || dateString.includes('T') && dateString.includes(':')) {
+                // Already has timezone info
+                date = new Date(dateString);
+            } else {
+                // Assume UTC if no timezone info
+                date = new Date(dateString + 'Z');
+            }
+            
+            return date.toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                timeZoneName: 'short'
+            });
+        }
+
         // Currency info modal functionality
         function showCurrencyInfo(currencyId) {
             const modal = new bootstrap.Modal(document.getElementById('currencyInfoModal'));
@@ -792,10 +908,41 @@
                 .then(response => response.json())
                 .then(data => {
                     title.innerHTML = `<i class="fas fa-info-circle me-2"></i>${data.symbol} - ${data.name}`;
+                    
+                    // Generate time display for notes as footer
+                    let timeFooter = '';
+                    if (data.notes_updated_at) {
+                        const relativeTime = getRelativeTime(data.notes_updated_at);
+                        const exactTime = formatExactTime(data.notes_updated_at);
+                        
+                        if (relativeTime) {
+                            timeFooter = `
+                                <div class="mt-3 pt-2 border-top">
+                                    <small class="text-muted d-flex align-items-center">
+                                        <i class="fas fa-clock me-2"></i>
+                                        <span title="${exactTime}" style="cursor: help; text-decoration: underline dotted;">
+                                            Note added ${relativeTime}
+                                        </span>
+                                    </small>
+                                </div>
+                            `;
+                        } else {
+                            timeFooter = `
+                                <div class="mt-3 pt-2 border-top">
+                                    <small class="text-muted d-flex align-items-center">
+                                        <i class="fas fa-clock me-2"></i>
+                                        Note added on ${exactTime}
+                                    </small>
+                                </div>
+                            `;
+                        }
+                    }
+                    
                     body.innerHTML = `
                         <div class="mb-3">
                             <h6><i class="fas fa-sticky-note me-2"></i>Notes:</h6>
                             <p class="text-muted">${data.notes}</p>
+                            ${timeFooter}
                         </div>
                         ${data.has_exchange_rates ? `
                         <div class="mb-3">
