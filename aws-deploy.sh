@@ -179,48 +179,28 @@ EOF
     print_status "✅ Systemd service created"
 }
 
-# Function to create Nginx configuration with working HTTPS setup
+# Function to create Nginx configuration - always use working HTTPS setup
 create_nginx_config() {
     local domain_name="$1"
-    print_status "Creating Nginx configuration..."
+    print_status "Creating Nginx configuration with working HTTPS setup..."
     
-    if [ -n "$domain_name" ]; then
-        # Check if SSL certificates exist in multiple possible locations
-        SSL_CERT_PATH=""
-        SSL_KEY_PATH=""
-        
-        # Check Let's Encrypt location
-        if [ -f "/etc/letsencrypt/live/$domain_name/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/$domain_name/privkey.pem" ]; then
-            SSL_CERT_PATH="/etc/letsencrypt/live/$domain_name/fullchain.pem"
-            SSL_KEY_PATH="/etc/letsencrypt/live/$domain_name/privkey.pem"
-        # Check alternative locations
-        elif [ -f "/etc/ssl/certs/$domain_name.crt" ] && [ -f "/etc/ssl/private/$domain_name.key" ]; then
-            SSL_CERT_PATH="/etc/ssl/certs/$domain_name.crt"
-            SSL_KEY_PATH="/etc/ssl/private/$domain_name.key"
-        # Check for any SSL files in common locations
-        elif [ -f "/etc/nginx/ssl/$domain_name.crt" ] && [ -f "/etc/nginx/ssl/$domain_name.key" ]; then
-            SSL_CERT_PATH="/etc/nginx/ssl/$domain_name.crt"
-            SSL_KEY_PATH="/etc/nginx/ssl/$domain_name.key"
-        fi
-        
-        if [ -n "$SSL_CERT_PATH" ] && [ -n "$SSL_KEY_PATH" ]; then
-            print_status "SSL certificates found at $SSL_CERT_PATH, creating HTTPS configuration..."
-            sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << EOF
+    # Always write the exact working configuration for live-currency.eu
+    sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << 'EOF'
 # HTTP to HTTPS redirect
 server {
     listen 80;
-    server_name $domain_name www.$domain_name;
-    return 301 https://\$server_name\$request_uri;
+    server_name live-currency.eu www.live-currency.eu;
+    return 301 https://$server_name$request_uri;
 }
 
 # HTTPS server
 server {
     listen 443 ssl http2;
-    server_name $domain_name www.$domain_name;
+    server_name live-currency.eu www.live-currency.eu;
     
-    # SSL Configuration
-    ssl_certificate $SSL_CERT_PATH;
-    ssl_certificate_key $SSL_KEY_PATH;
+    # SSL Configuration (UPDATE THESE PATHS)
+    ssl_certificate /etc/letsencrypt/live/live-currency.eu/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/live-currency.eu/privkey.pem;
     
     # SSL Security Settings
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -254,12 +234,12 @@ server {
     location / {
         proxy_pass http://127.0.0.1:5001;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         
         # Enhanced upload handling for large files
         proxy_request_buffering off;
@@ -278,122 +258,6 @@ server {
     }
 }
 EOF
-        else
-            print_status "No SSL certificates found, creating HTTP-only configuration..."
-            print_status "Checked locations:"
-            print_status "  - /etc/letsencrypt/live/$domain_name/"
-            print_status "  - /etc/ssl/certs/ and /etc/ssl/private/"
-            print_status "  - /etc/nginx/ssl/"
-            sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << EOF
-server {
-    listen 80;
-    server_name $domain_name www.$domain_name;
-    
-    # Fix for "413 Request Entity Too Large" error
-    client_max_body_size 15M;
-    client_body_buffer_size 128k;
-    client_body_timeout 60s;
-    
-    # Security headers
-    add_header X-Frame-Options DENY;
-    add_header X-Content-Type-Options nosniff;
-    add_header X-XSS-Protection "1; mode=block";
-    
-    # Timeouts to prevent socket errors
-    proxy_connect_timeout 60s;
-    proxy_send_timeout 60s;
-    proxy_read_timeout 300s;
-    
-    # Buffer settings
-    proxy_buffering on;
-    proxy_buffer_size 128k;
-    proxy_buffers 4 256k;
-    proxy_busy_buffers_size 256k;
-
-    location / {
-        proxy_pass http://127.0.0.1:5001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # Enhanced upload handling for large files
-        proxy_request_buffering off;
-        proxy_buffering off;
-        proxy_connect_timeout 75s;
-        proxy_read_timeout 300s;
-        
-        # Handle client disconnections gracefully
-        proxy_ignore_client_abort on;
-    }
-    
-    # Health check endpoint
-    location /health {
-        access_log off;
-        proxy_pass http://127.0.0.1:5001/health;
-    }
-}
-EOF
-        fi
-    else
-        # Default server configuration (no domain)
-        sudo tee /etc/nginx/conf.d/$SERVICE_NAME.conf > /dev/null << EOF
-server {
-    listen 80 default_server;
-    server_name _;
-    
-    # Fix for "413 Request Entity Too Large" error
-    client_max_body_size 15M;
-    client_body_buffer_size 128k;
-    client_body_timeout 60s;
-    
-    # Security headers
-    add_header X-Frame-Options DENY;
-    add_header X-Content-Type-Options nosniff;
-    add_header X-XSS-Protection "1; mode=block";
-    
-    # Timeouts to prevent socket errors
-    proxy_connect_timeout 60s;
-    proxy_send_timeout 60s;
-    proxy_read_timeout 300s;
-    
-    # Buffer settings
-    proxy_buffering on;
-    proxy_buffer_size 128k;
-    proxy_buffers 4 256k;
-    proxy_busy_buffers_size 256k;
-
-    location / {
-        proxy_pass http://127.0.0.1:5001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # Enhanced upload handling for large files
-        proxy_request_buffering off;
-        proxy_buffering off;
-        proxy_connect_timeout 75s;
-        proxy_read_timeout 300s;
-        
-        # Handle client disconnections gracefully
-        proxy_ignore_client_abort on;
-    }
-    
-    # Health check endpoint
-    location /health {
-        access_log off;
-        proxy_pass http://127.0.0.1:5001/health;
-    }
-}
-EOF
-    fi
     
     # Remove default Nginx config
     sudo rm -f /etc/nginx/conf.d/default.conf
@@ -402,7 +266,7 @@ EOF
     print_status "Testing Nginx configuration..."
     sudo nginx -t
     
-    print_status "✅ Nginx configuration created with working HTTPS setup"
+    print_status "✅ Nginx configuration created with exact working HTTPS setup"
 }
 
 
