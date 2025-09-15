@@ -574,6 +574,13 @@ with app.app_context():
         print('Tables may not be fully initialized yet')
 "
 
+# Create required directories for gunicorn
+print_status "Creating required directories..."
+sudo mkdir -p /var/run/gunicorn
+sudo chown ec2-user:ec2-user /var/run/gunicorn
+sudo mkdir -p /var/log/gunicorn
+sudo chown ec2-user:ec2-user /var/log/gunicorn
+
 # Start/restart services gracefully
 print_status "Starting/restarting services..."
 

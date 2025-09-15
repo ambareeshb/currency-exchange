@@ -32,7 +32,8 @@ proc_name = "currency-exchange"
 
 # Server mechanics
 daemon = False
-pidfile = "/var/run/gunicorn/currency-exchange.pid"
+# Remove pidfile for systemd managed service - not needed
+# pidfile = "/var/run/gunicorn/currency-exchange.pid"
 # User and group should be set via systemd service, not hardcoded here
 # user = "ec2-user"
 # group = "ec2-user"
