@@ -20,11 +20,15 @@
                 <form method="POST" action="{{ url_for('add_currency') }}">
                     <div class="mb-3">
                         <label for="name" class="form-label">Currency Name</label>
-                        <input type="text" class="form-control" id="name" name="name" placeholder="e.g., US Dollar" required>
+                        <input type="text" class="form-control" id="name" name="name"
+                               placeholder="e.g., US Dollar"
+                               value="{{ form_data.get('name', '') }}" required>
                     </div>
                     <div class="mb-3">
                         <label for="symbol" class="form-label">Symbol</label>
-                        <input type="text" class="form-control" id="symbol" name="symbol" placeholder="e.g., USD" maxlength="10" required>
+                        <input type="text" class="form-control" id="symbol" name="symbol"
+                               placeholder="e.g., USD" maxlength="10"
+                               value="{{ form_data.get('symbol', '') }}" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Buying Rate Range (Exchange buys currency from customer)</label>
@@ -32,13 +36,15 @@
                             <div class="col-6">
                                 <label for="min_buying_rate_to_aed" class="form-label text-success">Min Buying Rate</label>
                                 <input type="number" class="form-control" id="min_buying_rate_to_aed" name="min_buying_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.65" value="3.65">
+                                       step="0.000001" placeholder="e.g., 3.65"
+                                       value="{{ form_data.get('min_buying_rate_to_aed', '') }}">
                                 <small class="text-muted">Minimum rate when exchange buys</small>
                             </div>
                             <div class="col-6">
                                 <label for="max_buying_rate_to_aed" class="form-label text-success">Max Buying Rate</label>
                                 <input type="number" class="form-control" id="max_buying_rate_to_aed" name="max_buying_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.67" value="3.67">
+                                       step="0.000001" placeholder="e.g., 3.67"
+                                       value="{{ form_data.get('max_buying_rate_to_aed', '') }}">
                                 <small class="text-muted">Maximum rate when exchange buys</small>
                             </div>
                         </div>
@@ -49,22 +55,24 @@
                             <div class="col-6">
                                 <label for="min_selling_rate_to_aed" class="form-label text-danger">Min Selling Rate</label>
                                 <input type="number" class="form-control" id="min_selling_rate_to_aed" name="min_selling_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.68" value="3.68">
+                                       step="0.000001" placeholder="e.g., 3.68"
+                                       value="{{ form_data.get('min_selling_rate_to_aed', '') }}">
                                 <small class="text-muted">Minimum rate when exchange sells</small>
                             </div>
                             <div class="col-6">
                                 <label for="max_selling_rate_to_aed" class="form-label text-danger">Max Selling Rate</label>
                                 <input type="number" class="form-control" id="max_selling_rate_to_aed" name="max_selling_rate_to_aed"
-                                       step="0.000001" placeholder="e.g., 3.70" value="3.70">
+                                       step="0.000001" placeholder="e.g., 3.70"
+                                       value="{{ form_data.get('max_selling_rate_to_aed', '') }}">
                                 <small class="text-muted">Maximum rate when exchange sells</small>
                             </div>
                         </div>
-                        <div class="form-text">Set rate ranges for exchange operations. Buying rates should be lower than selling rates.</div>
+                        <div class="form-text">Set rate ranges for exchange operations. Overlapping rates are allowed for flexible pricing.</div>
                     </div>
                     <div class="mb-3">
                         <label for="admin_notes" class="form-label">Admin Notes</label>
                         <textarea class="form-control" id="admin_notes" name="admin_notes" rows="3"
-                                  placeholder="Add notes about this currency (visible to public via info button)"></textarea>
+                                  placeholder="Add notes about this currency (visible to public via info button)">{{ form_data.get('admin_notes', '') }}</textarea>
                         <div class="form-text">These notes will be visible to users via the info button</div>
                     </div>
                     <button type="submit" class="btn btn-success w-100">
@@ -198,7 +206,7 @@
                                 <small class="text-muted">Maximum rate when exchange sells</small>
                             </div>
                         </div>
-                        <div class="form-text">Set rate ranges for exchange operations. Buying rates should be lower than selling rates.</div>
+                        <div class="form-text">Set rate ranges for exchange operations. Overlapping rates are allowed for flexible pricing.</div>
                     </div>
                     <div class="mb-3">
                         <label for="edit_notes{{ currency.id }}" class="form-label">Admin Notes</label>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -204,7 +204,9 @@ def logout():
 @login_required
 def dashboard():
     currencies = Currency.query.order_by(Currency.symbol.asc()).all()
-    return render_template('dashboard.html', currencies=currencies)
+    # Get form data from session if there was an error
+    form_data = session.pop('form_data', {})
+    return render_template('dashboard.html', currencies=currencies, form_data=form_data)
 
 @app.route('/add_currency', methods=['POST'])
 @login_required
@@ -222,6 +224,16 @@ def add_currency():
         
         if min_buying_rate >= max_buying_rate:
             flash('Minimum buying rate must be less than maximum buying rate', 'error')
+            # Store form data in session for persistence
+            session['form_data'] = {
+                'name': name,
+                'symbol': symbol,
+                'min_buying_rate_to_aed': request.form.get('min_buying_rate_to_aed'),
+                'max_buying_rate_to_aed': request.form.get('max_buying_rate_to_aed'),
+                'min_selling_rate_to_aed': request.form.get('min_selling_rate_to_aed'),
+                'max_selling_rate_to_aed': request.form.get('max_selling_rate_to_aed'),
+                'admin_notes': admin_notes
+            }
             return redirect(url_for('dashboard'))
     
     # Handle selling rate range
@@ -233,17 +245,35 @@ def add_currency():
         
         if min_selling_rate >= max_selling_rate:
             flash('Minimum selling rate must be less than maximum selling rate', 'error')
+            # Store form data in session for persistence
+            session['form_data'] = {
+                'name': name,
+                'symbol': symbol,
+                'min_buying_rate_to_aed': request.form.get('min_buying_rate_to_aed'),
+                'max_buying_rate_to_aed': request.form.get('max_buying_rate_to_aed'),
+                'min_selling_rate_to_aed': request.form.get('min_selling_rate_to_aed'),
+                'max_selling_rate_to_aed': request.form.get('max_selling_rate_to_aed'),
+                'admin_notes': admin_notes
+            }
             return redirect(url_for('dashboard'))
     
-    # Validate that buying rates are lower than selling rates
-    if min_buying_rate and min_selling_rate and max_buying_rate >= min_selling_rate:
-        flash('Buying rates must be lower than selling rates', 'error')
-        return redirect(url_for('dashboard'))
+    # Remove strict validation - allow overlapping rates
+    # Users can now set overlapping buying and selling rates if needed
     
     # Check if currency symbol already exists
     existing = Currency.query.filter_by(symbol=symbol).first()
     if existing:
         flash(f'Currency with symbol {symbol} already exists', 'error')
+        # Store form data in session for persistence
+        session['form_data'] = {
+            'name': name,
+            'symbol': symbol,
+            'min_buying_rate_to_aed': request.form.get('min_buying_rate_to_aed'),
+            'max_buying_rate_to_aed': request.form.get('max_buying_rate_to_aed'),
+            'min_selling_rate_to_aed': request.form.get('min_selling_rate_to_aed'),
+            'max_selling_rate_to_aed': request.form.get('max_selling_rate_to_aed'),
+            'admin_notes': admin_notes
+        }
         return redirect(url_for('dashboard'))
     
     currency = Currency(
@@ -298,11 +328,8 @@ def update_currency(currency_id):
         currency.min_selling_rate_to_aed = None
         currency.max_selling_rate_to_aed = None
     
-    # Validate that buying rates are lower than selling rates
-    if (currency.min_buying_rate_to_aed and currency.min_selling_rate_to_aed and
-        currency.max_buying_rate_to_aed >= currency.min_selling_rate_to_aed):
-        flash('Buying rates must be lower than selling rates', 'error')
-        return redirect(url_for('dashboard'))
+    # Remove strict validation - allow overlapping rates
+    # Users can now set overlapping buying and selling rates if needed
     
     db.session.commit()
     flash(f'Currency {currency.symbol} updated successfully', 'success')
@@ -320,15 +347,13 @@ def delete_currency(currency_id):
     flash(f'Currency {symbol} deleted successfully', 'success')
     return redirect(url_for('dashboard'))
 
-@app.route('/from_aed')
-@login_required
-def from_aed():
+@app.route('/buying')
+def buying():
     currencies = Currency.query.order_by(Currency.symbol.asc()).all()
     return render_template('from_aed.html', currencies=currencies)
 
-@app.route('/to_aed')
-@login_required
-def to_aed():
+@app.route('/selling')
+def selling():
     currencies = Currency.query.order_by(Currency.symbol.asc()).all()
     return render_template('to_aed.html', currencies=currencies)
 

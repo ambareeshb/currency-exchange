@@ -30,6 +30,31 @@
         .alert {
             margin-bottom: 20px;
         }
+        /* Enhanced placeholder styling */
+        .form-control::placeholder {
+            color: #6c757d;
+            opacity: 0.8;
+            font-style: italic;
+        }
+        .form-control:focus::placeholder {
+            opacity: 0.5;
+        }
+        /* Form validation styling */
+        .form-control.is-invalid {
+            border-color: #dc3545;
+        }
+        .form-control.is-valid {
+            border-color: #198754;
+        }
+        /* Enhanced form styling */
+        .form-label {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+        .form-text {
+            font-size: 0.875rem;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
@@ -43,10 +68,10 @@
                 <a class="nav-link" href="{{ url_for('dashboard') }}">
                     <i class="fas fa-tachometer-alt me-1"></i>Dashboard
                 </a>
-                <a class="nav-link" href="{{ url_for('from_aed') }}">
+                <a class="nav-link" href="{{ url_for('buying') }}">
                     <i class="fas fa-arrow-right me-1"></i>Exchange buys at
                 </a>
-                <a class="nav-link" href="{{ url_for('to_aed') }}">
+                <a class="nav-link" href="{{ url_for('selling') }}">
                     <i class="fas fa-arrow-left me-1"></i>Exchange Sells at
                 </a>
                 <a class="nav-link" href="{{ url_for('logout') }}">
