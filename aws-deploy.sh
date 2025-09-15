@@ -186,6 +186,11 @@ create_nginx_config() {
     
     # Common configuration block
     local common_config='
+    # Fix for "413 Request Entity Too Large" error
+    client_max_body_size 15M;
+    client_body_buffer_size 128k;
+    client_body_timeout 60s;
+    
     # Security headers
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
@@ -194,7 +199,7 @@ create_nginx_config() {
     # Timeouts to prevent socket errors
     proxy_connect_timeout 60s;
     proxy_send_timeout 60s;
-    proxy_read_timeout 60s;
+    proxy_read_timeout 300s;
     
     # Buffer settings
     proxy_buffering on;
@@ -211,6 +216,11 @@ create_nginx_config() {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Enhanced upload handling for large files
+        proxy_request_buffering off;
+        proxy_buffering off;
+        proxy_connect_timeout 75s;
         
         # Handle client disconnections gracefully
         proxy_ignore_client_abort on;

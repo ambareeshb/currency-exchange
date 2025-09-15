@@ -77,6 +77,19 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
+# Handle file upload errors
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Handle file upload size limit exceeded"""
+    if request.endpoint and 'upload' in request.endpoint:
+        return jsonify({
+            'success': False,
+            'error': 'File size exceeds the 10MB limit. Please compress your image or choose a smaller file.'
+        }), 413
+    else:
+        flash('File size exceeds the 10MB limit. Please choose a smaller file.', 'error')
+        return redirect(request.url or url_for('dashboard'))
+
 class AdminUser(db.Model):
     __tablename__ = 'admin_users'
     

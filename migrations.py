@@ -270,6 +270,7 @@ def migration_005_add_note_images_table():
             
             if db.engine.dialect.name == 'postgresql':
                 with db.engine.connect() as connection:
+                    # Create the table with all required columns including caption
                     connection.execute(text("""
                         CREATE TABLE note_images (
                             id SERIAL PRIMARY KEY,
@@ -278,14 +279,22 @@ def migration_005_add_note_images_table():
                             original_filename VARCHAR(255) NOT NULL,
                             file_size INTEGER NOT NULL,
                             mime_type VARCHAR(100) NOT NULL,
-                            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            caption TEXT
                         );
                     """))
+                    
+                    # Create index for better performance
+                    connection.execute(text("""
+                        CREATE INDEX idx_note_images_currency_id ON note_images(currency_id);
+                    """))
+                    
                     connection.commit()
-                    print("✅ Created note_images table (PostgreSQL)")
+                    print("✅ Created note_images table with caption column and index (PostgreSQL)")
                     
             elif db.engine.dialect.name == 'sqlite':
                 with db.engine.connect() as connection:
+                    # Create the table with all required columns including caption
                     connection.execute(text("""
                         CREATE TABLE note_images (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -295,19 +304,46 @@ def migration_005_add_note_images_table():
                             file_size INTEGER NOT NULL,
                             mime_type VARCHAR(100) NOT NULL,
                             uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            caption TEXT,
                             FOREIGN KEY (currency_id) REFERENCES currency(id) ON DELETE CASCADE
                         );
                     """))
+                    
+                    # Create index for better performance
+                    connection.execute(text("""
+                        CREATE INDEX idx_note_images_currency_id ON note_images(currency_id);
+                    """))
+                    
                     connection.commit()
-                    print("✅ Created note_images table (SQLite)")
+                    print("✅ Created note_images table with caption column and index (SQLite)")
             else:
                 print(f"Unknown database dialect: {db.engine.dialect.name}")
+                # Fallback: let SQLAlchemy create the table
+                print("Using SQLAlchemy to create note_images table...")
+                db.create_all()
+                print("✅ Created note_images table using SQLAlchemy")
         else:
             print("note_images table already exists")
+            # Verify the table has all required columns
+            columns = [col['name'] for col in inspector.get_columns('note_images')]
+            required_columns = ['id', 'currency_id', 'filename', 'original_filename', 'file_size', 'mime_type', 'uploaded_at', 'caption']
+            missing_columns = [col for col in required_columns if col not in columns]
+            if missing_columns:
+                print(f"note_images table exists but missing columns: {missing_columns}")
+                # This will be handled by migration_006
+            else:
+                print("note_images table has all required columns")
             
     except Exception as e:
         print(f"Migration 005 failed: {e}")
-        print("note_images table will be created by SQLAlchemy if needed")
+        print("Attempting to create note_images table using SQLAlchemy...")
+        try:
+            # Fallback: use SQLAlchemy to create the table
+            db.create_all()
+            print("✅ Created note_images table using SQLAlchemy fallback")
+        except Exception as fallback_error:
+            print(f"SQLAlchemy fallback also failed: {fallback_error}")
+            print("Manual intervention may be required")
 
 def migration_006_add_caption_to_note_images():
     """Migration 006: Add caption column to note_images table"""
