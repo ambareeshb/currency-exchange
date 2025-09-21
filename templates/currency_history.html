@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}{{ currency.symbol }} History - Currency Exchange Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2><i class="fas fa-history me-2"></i>{{ currency.symbol }} - {{ currency.name }} History</h2>
+                <p class="text-muted">Complete historical record of changes</p>
+            </div>
+            <div>
+                <a href="{{ url_for('history_dashboard') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to History Dashboard
+                </a>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-tachometer-alt me-2"></i>Main Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Current State Card -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle me-2"></i>Current State</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Exchange Rates</h6>
+                        <p><strong>Buying:</strong> {{ currency.buying_rate_display }}</p>
+                        <p><strong>Selling:</strong> {{ currency.selling_rate_display }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Notes</h6>
+                        {% if currency.admin_notes %}
+                            <p>{{ currency.admin_notes[:100] }}{% if currency.admin_notes|length > 100 %}...{% endif %}</p>
+                        {% else %}
+                            <p class="text-muted">No admin notes</p>
+                        {% endif %}
+                        <p><strong>Images:</strong> {{ currency.images.count() }} attached</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History Timeline -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-timeline me-2"></i>Change Timeline</h5>
+            </div>
+            <div class="card-body">
+                {% if currency_changes or note_changes %}
+                <!-- Combine and sort all changes -->
+                {% set all_changes = [] %}
+                {% for change in currency_changes %}
+                    {% set _ = all_changes.append(('currency', change)) %}
+                {% endfor %}
+                {% for change in note_changes %}
+                    {% set _ = all_changes.append(('note', change)) %}
+                {% endfor %}
+                {% set sorted_changes = all_changes|sort(attribute='1.created_at', reverse=true) %}
+
+                <div class="timeline">
+                    {% for change_type, change in sorted_changes %}
+                    <div class="timeline-item mb-4">
+                        <div class="row">
+                            <div class="col-md-2 text-end">
+                                <small class="text-muted">
+                                    {{ change.created_at.strftime('%Y-%m-%d') }}<br>
+                                    {{ change.created_at.strftime('%H:%M:%S') }}
+                                </small>
+                            </div>
+                            <div class="col-md-1 text-center">
+                                <div class="timeline-marker">
+                                    {% if change_type == 'currency' %}
+                                        {% if change.change_type == 'created' %}
+                                            <i class="fas fa-plus-circle text-success"></i>
+                                        {% elif change.change_type == 'updated' %}
+                                            <i class="fas fa-edit text-warning"></i>
+                                        {% elif change.change_type == 'deleted' %}
+                                            <i class="fas fa-trash text-danger"></i>
+                                        {% endif %}
+                                    {% else %}
+                                        {% if change.action_type == 'created' %}
+                                            <i class="fas fa-sticky-note text-success"></i>
+                                        {% elif change.action_type == 'updated' %}
+                                            <i class="fas fa-edit text-warning"></i>
+                                        {% elif change.action_type == 'deleted' %}
+                                            <i class="fas fa-trash text-danger"></i>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-9">
+                                <div class="card">
+                                    <div class="card-body">
+                                        {% if change_type == 'currency' %}
+                                            <h6 class="card-title">
+                                                Currency {{ change.change_type|title }}
+                                                {% if change.change_type == 'created' %}
+                                                    <span class="badge bg-success ms-2">Created</span>
+                                                {% elif change.change_type == 'updated' %}
+                                                    <span class="badge bg-warning ms-2">Updated</span>
+                                                {% elif change.change_type == 'deleted' %}
+                                                    <span class="badge bg-danger ms-2">Deleted</span>
+                                                {% endif %}
+                                            </h6>
+                                            <p class="card-text">
+                                                <strong>Changed by:</strong> {{ change.created_by or 'System' }}<br>
+                                                <strong>Reason:</strong> {{ change.change_reason or 'No reason provided' }}
+                                            </p>
+                                            <div class="mt-2">
+                                                <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#currency-details-{{ change.id }}">
+                                                    <i class="fas fa-eye"></i> View Details
+                                                </button>
+                                                <div class="collapse mt-2" id="currency-details-{{ change.id }}">
+                                                    <div class="card card-body bg-light">
+                                                        <div class="row">
+                                                            <div class="col-md-6">
+                                                                <h6>Exchange Rates</h6>
+                                                                <p><strong>Min Buying:</strong> {{ change.min_buying_rate_to_aed or 'Not set' }}</p>
+                                                                <p><strong>Max Buying:</strong> {{ change.max_buying_rate_to_aed or 'Not set' }}</p>
+                                                                <p><strong>Min Selling:</strong> {{ change.min_selling_rate_to_aed or 'Not set' }}</p>
+                                                                <p><strong>Max Selling:</strong> {{ change.max_selling_rate_to_aed or 'Not set' }}</p>
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <h6>Admin Notes</h6>
+                                                                {% if change.admin_notes %}
+                                                                    <p>{{ change.admin_notes }}</p>
+                                                                {% else %}
+                                                                    <p class="text-muted">No admin notes</p>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <h6 class="card-title">
+                                                {{ change.note_type|title }} Note {{ change.action_type|title }}
+                                                {% if change.action_type == 'created' %}
+                                                    <span class="badge bg-success ms-2">Created</span>
+                                                {% elif change.action_type == 'updated' %}
+                                                    <span class="badge bg-warning ms-2">Updated</span>
+                                                {% elif change.action_type == 'deleted' %}
+                                                    <span class="badge bg-danger ms-2">Deleted</span>
+                                                {% endif %}
+                                                {% if change.note_type == 'text' %}
+                                                    <span class="badge bg-primary ms-1">Text</span>
+                                                {% elif change.note_type == 'image' %}
+                                                    <span class="badge bg-info ms-1">Image</span>
+                                                {% endif %}
+                                            </h6>
+                                            <p class="card-text">
+                                                <strong>Changed by:</strong> {{ change.created_by or 'System' }}<br>
+                                                <strong>Reason:</strong> {{ change.action_reason or 'No reason provided' }}
+                                            </p>
+                                            {% if change.note_type == 'text' %}
+                                                <div class="mt-2">
+                                                    <h6>Content:</h6>
+                                                    {% if change.content %}
+                                                        <div class="bg-light p-2 rounded">
+                                                            {{ change.content }}
+                                                        </div>
+                                                    {% else %}
+                                                        <p class="text-muted">No content</p>
+                                                    {% endif %}
+                                                </div>
+                                            {% elif change.note_type == 'image' %}
+                                                <div class="mt-2">
+                                                    <h6>Image Details:</h6>
+                                                    <p><strong>Original Filename:</strong> {{ change.image_original_filename or 'Unknown' }}</p>
+                                                    <p><strong>System Filename:</strong> {{ change.image_filename or 'Unknown' }}</p>
+                                                    {% if change.image_caption %}
+                                                        <p><strong>Caption:</strong> {{ change.image_caption }}</p>
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted">
+                    <i class="fas fa-history fa-3x mb-3"></i>
+                    <p>No historical records found for this currency.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.timeline-marker {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #f8f9fa;
+    border: 2px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+
+.timeline-item {
+    position: relative;
+}
+
+.timeline-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 60px;
+    width: 2px;
+    height: calc(100% - 20px);
+    background: #dee2e6;
+    transform: translateX(-50%);
+    z-index: -1;
+}
+
+@media (max-width: 768px) {
+    .timeline-item:not(:last-child)::after {
+        left: 8.33%;
+    }
+}
+</style>
+
+{% endblock %}

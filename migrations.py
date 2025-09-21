@@ -52,6 +52,10 @@ def run_migrations():
         migration_002_create_admin_user()
         
         print("All migrations completed successfully")
+        
+        # Run historical tracking migrations
+        from historical_migrations import run_historical_migrations
+        run_historical_migrations()
 
 def migration_001_update_password_hash_length():
     """Migration 001: Update password_hash column to support longer hashes"""

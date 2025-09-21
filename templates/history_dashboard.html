@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}History Dashboard - Currency Exchange Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2><i class="fas fa-history me-2"></i>Historical Data Dashboard</h2>
+        <p class="text-muted">View historical changes to currencies and notes</p>
+    </div>
+</div>
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs mb-4" id="historyTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="currency-history-tab" data-bs-toggle="tab" data-bs-target="#currency-history" type="button" role="tab">
+            <i class="fas fa-coins me-2"></i>Currency Changes
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="note-history-tab" data-bs-toggle="tab" data-bs-target="#note-history" type="button" role="tab">
+            <i class="fas fa-sticky-note me-2"></i>Note Changes
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="currency-specific-tab" data-bs-toggle="tab" data-bs-target="#currency-specific" type="button" role="tab">
+            <i class="fas fa-search me-2"></i>Currency Specific
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="historyTabContent">
+    <!-- Currency History Tab -->
+    <div class="tab-pane fade show active" id="currency-history" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-coins me-2"></i>Recent Currency Changes</h5>
+                <small class="text-muted">Latest 50 currency modifications</small>
+            </div>
+            <div class="card-body">
+                {% if currency_history %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Currency</th>
+                                <th>Change Type</th>
+                                <th>Changed By</th>
+                                <th>Reason</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in currency_history %}
+                            <tr>
+                                <td>
+                                    <small>{{ record.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                </td>
+                                <td>
+                                    <strong>{{ record.symbol }}</strong><br>
+                                    <small class="text-muted">{{ record.name }}</small>
+                                </td>
+                                <td>
+                                    {% if record.change_type == 'created' %}
+                                        <span class="badge bg-success">Created</span>
+                                    {% elif record.change_type == 'updated' %}
+                                        <span class="badge bg-warning">Updated</span>
+                                    {% elif record.change_type == 'deleted' %}
+                                        <span class="badge bg-danger">Deleted</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ record.change_type }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ record.created_by or 'System' }}</td>
+                                <td>
+                                    <small>{{ record.change_reason or 'No reason provided' }}</small>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#details-{{ record.id }}">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                    <div class="collapse mt-2" id="details-{{ record.id }}">
+                                        <div class="card card-body">
+                                            <small>
+                                                <strong>Rates:</strong><br>
+                                                Buy: {{ record.min_buying_rate_to_aed or 'N/A' }} - {{ record.max_buying_rate_to_aed or 'N/A' }}<br>
+                                                Sell: {{ record.min_selling_rate_to_aed or 'N/A' }} - {{ record.max_selling_rate_to_aed or 'N/A' }}<br>
+                                                {% if record.admin_notes %}
+                                                <strong>Notes:</strong> {{ record.admin_notes[:100] }}{% if record.admin_notes|length > 100 %}...{% endif %}
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted">
+                    <i class="fas fa-history fa-3x mb-3"></i>
+                    <p>No currency history records found.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Note History Tab -->
+    <div class="tab-pane fade" id="note-history" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-sticky-note me-2"></i>Recent Note Changes</h5>
+                <small class="text-muted">Latest 50 note modifications</small>
+            </div>
+            <div class="card-body">
+                {% if note_history %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date/Time</th>
+                                <th>Currency</th>
+                                <th>Note Type</th>
+                                <th>Action</th>
+                                <th>Changed By</th>
+                                <th>Content</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in note_history %}
+                            <tr>
+                                <td>
+                                    <small>{{ record.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</small>
+                                </td>
+                                <td>
+                                    {% if record.currency %}
+                                        <strong>{{ record.currency.symbol }}</strong><br>
+                                        <small class="text-muted">{{ record.currency.name }}</small>
+                                    {% else %}
+                                        <span class="text-muted">Deleted Currency</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if record.note_type == 'text' %}
+                                        <span class="badge bg-primary">Text</span>
+                                    {% elif record.note_type == 'image' %}
+                                        <span class="badge bg-info">Image</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if record.action_type == 'created' %}
+                                        <span class="badge bg-success">Created</span>
+                                    {% elif record.action_type == 'updated' %}
+                                        <span class="badge bg-warning">Updated</span>
+                                    {% elif record.action_type == 'deleted' %}
+                                        <span class="badge bg-danger">Deleted</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ record.created_by or 'System' }}</td>
+                                <td>
+                                    {% if record.note_type == 'text' %}
+                                        <small>{{ record.content[:50] if record.content else 'No content' }}{% if record.content and record.content|length > 50 %}...{% endif %}</small>
+                                    {% elif record.note_type == 'image' %}
+                                        <small>
+                                            <strong>File:</strong> {{ record.image_original_filename or 'Unknown' }}<br>
+                                            {% if record.image_caption %}
+                                            <strong>Caption:</strong> {{ record.image_caption[:30] }}{% if record.image_caption|length > 30 %}...{% endif %}
+                                            {% endif %}
+                                        </small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted">
+                    <i class="fas fa-sticky-note fa-3x mb-3"></i>
+                    <p>No note history records found.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Currency Specific Tab -->
+    <div class="tab-pane fade" id="currency-specific" role="tabpanel">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-search me-2"></i>Currency Specific History</h5>
+                <small class="text-muted">View complete history for a specific currency</small>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for currency in currencies %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">{{ currency.symbol }} - {{ currency.name }}</h6>
+                                <p class="card-text">
+                                    <small class="text-muted">
+                                        History records: {{ currency.history|length + currency.note_history|length }}
+                                    </small>
+                                </p>
+                                <a href="{{ url_for('currency_history', currency_id=currency.id) }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-history me-1"></i>View History
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize Bootstrap tabs
+document.addEventListener('DOMContentLoaded', function() {
+    var triggerTabList = [].slice.call(document.querySelectorAll('#historyTabs button'))
+    triggerTabList.forEach(function (triggerEl) {
+        var tabTrigger = new bootstrap.Tab(triggerEl)
+        
+        triggerEl.addEventListener('click', function (event) {
+            event.preventDefault()
+            tabTrigger.show()
+        })
+    })
+});
+</script>
+
+{% endblock %}

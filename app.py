@@ -142,7 +142,7 @@ class Currency(db.Model):
     @property
     def has_notes(self):
         """Check if currency has any notes (text or images)"""
-        return bool(self.admin_notes) or len(self.images) > 0
+        return bool(self.admin_notes) or self.images.count() > 0
     
     @property
     def latest_note_timestamp(self):
@@ -154,7 +154,7 @@ class Currency(db.Model):
             timestamps.append(self.notes_updated_at)
         
         # Add image timestamps
-        for image in self.images:
+        for image in self.images.all():
             if image.uploaded_at:
                 timestamps.append(image.uploaded_at)
         
@@ -212,11 +212,127 @@ class NoteImage(db.Model):
     uploaded_at = db.Column(db.DateTime, default=db.func.current_timestamp())
     caption = db.Column(db.Text, nullable=True)  # Optional caption for the image
     
-    # Relationship
-    currency = db.relationship('Currency', backref=db.backref('images', lazy=True, cascade='all, delete-orphan'))
+    # Soft delete columns
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by = db.Column(db.String(80), nullable=True)
+    delete_reason = db.Column(db.Text, nullable=True)
+    
+    # Relationship - only show non-deleted images by default
+    currency = db.relationship('Currency', backref=db.backref('images',
+                                                             lazy='dynamic',
+                                                             primaryjoin="and_(NoteImage.currency_id==Currency.id, NoteImage.deleted_at.is_(None))",
+                                                             cascade='all, delete-orphan'))
+    
+    @property
+    def is_deleted(self):
+        return self.deleted_at is not None
+    
+    def soft_delete(self, deleted_by=None, reason=None):
+        """Soft delete the image"""
+        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_by = deleted_by
+        self.delete_reason = reason
     
     def __repr__(self):
         return f'<NoteImage {self.original_filename} for {self.currency.symbol}>'
+
+class CurrencyHistory(db.Model):
+    __tablename__ = 'currency_history'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    currency_id = db.Column(db.Integer, db.ForeignKey('currency.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    symbol = db.Column(db.String(10), nullable=False)
+    min_buying_rate_to_aed = db.Column(db.Float, nullable=True)
+    max_buying_rate_to_aed = db.Column(db.Float, nullable=True)
+    min_selling_rate_to_aed = db.Column(db.Float, nullable=True)
+    max_selling_rate_to_aed = db.Column(db.Float, nullable=True)
+    admin_notes = db.Column(db.Text, nullable=True)
+    notes_updated_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    created_by = db.Column(db.String(80), nullable=True)
+    change_type = db.Column(db.String(20), nullable=False, default='update')
+    change_reason = db.Column(db.Text, nullable=True)
+    
+    # Relationship
+    currency = db.relationship('Currency', backref=db.backref('history', lazy=True, order_by='CurrencyHistory.created_at.desc()'))
+    
+    def __repr__(self):
+        return f'<CurrencyHistory {self.symbol} - {self.change_type} at {self.created_at}>'
+
+class NoteHistory(db.Model):
+    __tablename__ = 'note_history'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    currency_id = db.Column(db.Integer, db.ForeignKey('currency.id'), nullable=False)
+    note_type = db.Column(db.String(20), nullable=False)  # 'text' or 'image'
+    content = db.Column(db.Text, nullable=True)  # For text notes
+    image_filename = db.Column(db.String(255), nullable=True)  # For image notes
+    image_original_filename = db.Column(db.String(255), nullable=True)
+    image_caption = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    created_by = db.Column(db.String(80), nullable=True)
+    action_type = db.Column(db.String(20), nullable=False)  # 'created', 'updated', 'deleted'
+    action_reason = db.Column(db.Text, nullable=True)
+    
+    # Relationship
+    currency = db.relationship('Currency', backref=db.backref('note_history', lazy=True, order_by='NoteHistory.created_at.desc()'))
+    
+    def __repr__(self):
+        return f'<NoteHistory {self.note_type} - {self.action_type} for {self.currency.symbol}>'
+
+# Historical tracking functions
+def create_currency_history_record(currency, change_type='update', created_by=None, change_reason=None):
+    """Create a historical record of currency changes"""
+    try:
+        history_record = CurrencyHistory(
+            currency_id=currency.id,
+            name=currency.name,
+            symbol=currency.symbol,
+            min_buying_rate_to_aed=currency.min_buying_rate_to_aed,
+            max_buying_rate_to_aed=currency.max_buying_rate_to_aed,
+            min_selling_rate_to_aed=currency.min_selling_rate_to_aed,
+            max_selling_rate_to_aed=currency.max_selling_rate_to_aed,
+            admin_notes=currency.admin_notes,
+            notes_updated_at=currency.notes_updated_at,
+            created_by=created_by,
+            change_type=change_type,
+            change_reason=change_reason
+        )
+        db.session.add(history_record)
+        return history_record
+    except Exception as e:
+        print(f"Error creating currency history record: {e}")
+        return None
+
+def create_note_history_record(currency_id, note_type, action_type, created_by=None, action_reason=None, **kwargs):
+    """Create a historical record of note changes"""
+    try:
+        history_record = NoteHistory(
+            currency_id=currency_id,
+            note_type=note_type,
+            action_type=action_type,
+            created_by=created_by,
+            action_reason=action_reason,
+            content=kwargs.get('content'),
+            image_filename=kwargs.get('image_filename'),
+            image_original_filename=kwargs.get('image_original_filename'),
+            image_caption=kwargs.get('image_caption')
+        )
+        db.session.add(history_record)
+        return history_record
+    except Exception as e:
+        print(f"Error creating note history record: {e}")
+        return None
+
+def get_current_user():
+    """Get current user for historical tracking"""
+    try:
+        if current_user.is_authenticated:
+            return current_user.username
+        return 'system'
+    except:
+        return 'system'
 
 # Utility functions for image processing
 def allowed_file(filename):
@@ -322,6 +438,18 @@ def save_uploaded_image(file, currency_id, caption=None):
         db.session.add(note_image)
         db.session.commit()
         
+        # Create note history record
+        create_note_history_record(
+            currency_id,
+            note_type='image',
+            action_type='created',
+            created_by=get_current_user(),
+            action_reason='Image uploaded',
+            image_filename=unique_filename,
+            image_original_filename=file.filename,
+            image_caption=caption
+        )
+        
         return True, unique_filename
         
     except Exception as e:
@@ -411,18 +539,33 @@ def upload_multiple_images(currency_id):
 @app.route('/delete_image/<int:image_id>', methods=['POST'])
 @login_required
 def delete_image(image_id):
-    """Delete an uploaded image"""
+    """Soft delete an uploaded image"""
     image = NoteImage.query.get_or_404(image_id)
     currency_id = image.currency_id
     
     try:
-        # Delete file from filesystem
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], image.filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        # Check if already deleted
+        if image.is_deleted:
+            return jsonify({'success': False, 'error': 'Image is already deleted'}), 400
         
-        # Delete from database
-        db.session.delete(image)
+        # Soft delete the image
+        image.soft_delete(
+            deleted_by=get_current_user(),
+            reason='Image deleted by admin'
+        )
+        
+        # Create note history record
+        create_note_history_record(
+            currency_id,
+            note_type='image',
+            action_type='deleted',
+            created_by=get_current_user(),
+            action_reason='Image soft deleted by admin',
+            image_filename=image.filename,
+            image_original_filename=image.original_filename,
+            image_caption=image.caption
+        )
+        
         db.session.commit()
         
         return jsonify({
@@ -496,6 +639,43 @@ def dashboard():
     # Get form data from session if there was an error
     form_data = session.pop('form_data', {})
     return render_template('dashboard.html', currencies=currencies, form_data=form_data)
+
+@app.route('/history')
+@login_required
+def history_dashboard():
+    """Admin dashboard for viewing historical data"""
+    # Get currency history (latest 50 records)
+    currency_history = CurrencyHistory.query.order_by(CurrencyHistory.created_at.desc()).limit(50).all()
+    
+    # Get note history (latest 50 records)
+    note_history = NoteHistory.query.order_by(NoteHistory.created_at.desc()).limit(50).all()
+    
+    # Get all currencies for filtering
+    currencies = Currency.query.order_by(Currency.symbol.asc()).all()
+    
+    return render_template('history_dashboard.html',
+                         currency_history=currency_history,
+                         note_history=note_history,
+                         currencies=currencies)
+
+@app.route('/currency_history/<int:currency_id>')
+@login_required
+def currency_history(currency_id):
+    """Get historical data for a specific currency"""
+    currency = Currency.query.get_or_404(currency_id)
+    
+    # Get currency change history
+    currency_changes = CurrencyHistory.query.filter_by(currency_id=currency_id)\
+                                           .order_by(CurrencyHistory.created_at.desc()).all()
+    
+    # Get note history for this currency
+    note_changes = NoteHistory.query.filter_by(currency_id=currency_id)\
+                                   .order_by(NoteHistory.created_at.desc()).all()
+    
+    return render_template('currency_history.html',
+                         currency=currency,
+                         currency_changes=currency_changes,
+                         note_changes=note_changes)
 
 @app.route('/add_currency', methods=['POST'])
 @login_required
@@ -578,6 +758,25 @@ def add_currency():
     db.session.add(currency)
     db.session.commit()
     
+    # Create historical record for new currency
+    create_currency_history_record(
+        currency,
+        change_type='created',
+        created_by=get_current_user(),
+        change_reason='New currency added to system'
+    )
+    
+    # Create note history if admin notes were added
+    if admin_notes:
+        create_note_history_record(
+            currency.id,
+            note_type='text',
+            action_type='created',
+            created_by=get_current_user(),
+            action_reason='Initial admin notes added',
+            content=admin_notes
+        )
+    
     # Handle multiple image uploads if provided
     uploaded_images = 0
     image_errors = []
@@ -616,11 +815,20 @@ def update_currency(currency_id):
     currency = Currency.query.get_or_404(currency_id)
     currency.name = request.form['name']
     
+    # Store original values for comparison
+    original_name = currency.name
+    original_min_buying = currency.min_buying_rate_to_aed
+    original_max_buying = currency.max_buying_rate_to_aed
+    original_min_selling = currency.min_selling_rate_to_aed
+    original_max_selling = currency.max_selling_rate_to_aed
+    original_notes = currency.admin_notes
+    
     # Get the new admin notes
     new_admin_notes = request.form.get('admin_notes', '').strip() or None
     
     # Check if notes have changed and update timestamp accordingly
-    if new_admin_notes != currency.admin_notes:
+    notes_changed = new_admin_notes != currency.admin_notes
+    if notes_changed:
         currency.admin_notes = new_admin_notes
         currency.notes_updated_at = datetime.now(timezone.utc) if new_admin_notes else None
     else:
@@ -673,8 +881,43 @@ def update_currency(currency_id):
                 else:
                     image_errors.append(f"{file.filename}: {result}")
     
+    # Check what changed for historical tracking
+    changes = []
+    if currency.name != original_name:
+        changes.append(f"Name: '{original_name}' → '{currency.name}'")
+    if currency.min_buying_rate_to_aed != original_min_buying:
+        changes.append(f"Min buying rate: {original_min_buying} → {currency.min_buying_rate_to_aed}")
+    if currency.max_buying_rate_to_aed != original_max_buying:
+        changes.append(f"Max buying rate: {original_max_buying} → {currency.max_buying_rate_to_aed}")
+    if currency.min_selling_rate_to_aed != original_min_selling:
+        changes.append(f"Min selling rate: {original_min_selling} → {currency.min_selling_rate_to_aed}")
+    if currency.max_selling_rate_to_aed != original_max_selling:
+        changes.append(f"Max selling rate: {original_max_selling} → {currency.max_selling_rate_to_aed}")
+    
     # Commit currency updates
     db.session.commit()
+    
+    # Create historical record if there were changes
+    if changes or notes_changed:
+        change_reason = "Currency updated: " + "; ".join(changes) if changes else "Admin notes updated"
+        create_currency_history_record(
+            currency,
+            change_type='updated',
+            created_by=get_current_user(),
+            change_reason=change_reason
+        )
+    
+    # Create note history if notes changed
+    if notes_changed:
+        action_type = 'updated' if original_notes and new_admin_notes else ('created' if new_admin_notes else 'deleted')
+        create_note_history_record(
+            currency.id,
+            note_type='text',
+            action_type=action_type,
+            created_by=get_current_user(),
+            action_reason=f"Admin notes {action_type}",
+            content=new_admin_notes
+        )
     
     # Prepare response message
     message = f'Currency {currency.symbol} updated successfully'
@@ -716,6 +959,43 @@ def delete_currency(currency_id):
     currency = Currency.query.get_or_404(currency_id)
     symbol = currency.symbol
     
+    # Create historical record before deletion
+    create_currency_history_record(
+        currency,
+        change_type='deleted',
+        created_by=get_current_user(),
+        change_reason='Currency deleted by admin'
+    )
+    
+    # Soft delete all associated images
+    for image in currency.images.all():
+        if not image.is_deleted:
+            image.soft_delete(
+                deleted_by=get_current_user(),
+                reason='Currency deleted - cascading image deletion'
+            )
+            create_note_history_record(
+                currency_id,
+                note_type='image',
+                action_type='deleted',
+                created_by=get_current_user(),
+                action_reason='Image deleted due to currency deletion',
+                image_filename=image.filename,
+                image_original_filename=image.original_filename,
+                image_caption=image.caption
+            )
+    
+    # Create note history for text notes if they exist
+    if currency.admin_notes:
+        create_note_history_record(
+            currency_id,
+            note_type='text',
+            action_type='deleted',
+            created_by=get_current_user(),
+            action_reason='Text notes deleted due to currency deletion',
+            content=currency.admin_notes
+        )
+    
     db.session.delete(currency)
     db.session.commit()
     
@@ -738,7 +1018,7 @@ def get_currency_notes(currency_id):
     
     # Get attached images with captions
     images_data = []
-    for image in currency.images:
+    for image in currency.images.all():
         images_data.append({
             'id': image.id,
             'filename': image.filename,
