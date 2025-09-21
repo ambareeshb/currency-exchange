@@ -589,6 +589,11 @@ def uploaded_file(filename):
     """Serve uploaded images"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon.ico"""
+    return send_from_directory(os.path.join(app.root_path, 'static'), 'favicon.ico', mimetype='image/vnd.microsoft.icon')
+
 @app.route('/')
 def index():
     currencies_db = Currency.query.order_by(Currency.symbol.asc()).all()
