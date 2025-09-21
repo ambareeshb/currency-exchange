@@ -6,18 +6,19 @@
     </linearGradient>
   </defs>
   
-  <!-- Background circle -->
-  <circle cx="16" cy="16" r="15" fill="url(#grad1)" stroke="#fff" stroke-width="1"/>
+  <!-- Modern circular background without border -->
+  <circle cx="16" cy="16" r="14" fill="url(#grad1)"/>
   
   <!-- Currency symbols -->
-  <text x="8" y="12" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="white">$</text>
-  <text x="20" y="12" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="white">€</text>
+  <text x="7" y="12" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">$</text>
+  <text x="19" y="12" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">€</text>
   
-  <!-- Exchange arrows -->
-  <path d="M 6 16 L 14 16 M 11 13 L 14 16 L 11 19" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
-  <path d="M 26 16 L 18 16 M 21 13 L 18 16 L 21 19" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+  <!-- Modern exchange arrows -->
+  <line x1="8" y1="16" x2="24" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M 20 13 L 24 16 L 20 19" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 12 13 L 8 16 L 12 19" stroke="white" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   
   <!-- Bottom currency symbols -->
-  <text x="8" y="24" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="white">¥</text>
-  <text x="20" y="24" font-family="Arial, sans-serif" font-size="8" font-weight="bold" fill="white">£</text>
+  <text x="7" y="26" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">¥</text>
+  <text x="19" y="26" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">£</text>
 </svg>
