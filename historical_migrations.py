@@ -87,12 +87,10 @@ def migration_007_create_currency_history_table():
                         );
                     """))
                     
-                    # Create indexes for better performance
-                    connection.execute(text("""
-                        CREATE INDEX idx_currency_history_currency_id ON currency_history(currency_id);
-                        CREATE INDEX idx_currency_history_created_at ON currency_history(created_at);
-                        CREATE INDEX idx_currency_history_change_type ON currency_history(change_type);
-                    """))
+                    # Create indexes for better performance (one at a time for SQLite)
+                    connection.execute(text("CREATE INDEX idx_currency_history_currency_id ON currency_history(currency_id);"))
+                    connection.execute(text("CREATE INDEX idx_currency_history_created_at ON currency_history(created_at);"))
+                    connection.execute(text("CREATE INDEX idx_currency_history_change_type ON currency_history(change_type);"))
                     
                     connection.commit()
                     print("✅ Created currency_history table with indexes (SQLite)")
@@ -216,13 +214,11 @@ def migration_009_create_note_history_table():
                         );
                     """))
                     
-                    # Create indexes for better performance
-                    connection.execute(text("""
-                        CREATE INDEX idx_note_history_currency_id ON note_history(currency_id);
-                        CREATE INDEX idx_note_history_created_at ON note_history(created_at);
-                        CREATE INDEX idx_note_history_note_type ON note_history(note_type);
-                        CREATE INDEX idx_note_history_action_type ON note_history(action_type);
-                    """))
+                    # Create indexes for better performance (one at a time for SQLite)
+                    connection.execute(text("CREATE INDEX idx_note_history_currency_id ON note_history(currency_id);"))
+                    connection.execute(text("CREATE INDEX idx_note_history_created_at ON note_history(created_at);"))
+                    connection.execute(text("CREATE INDEX idx_note_history_note_type ON note_history(note_type);"))
+                    connection.execute(text("CREATE INDEX idx_note_history_action_type ON note_history(action_type);"))
                     
                     connection.commit()
                     print("✅ Created note_history table with indexes (SQLite)")

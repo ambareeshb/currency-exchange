@@ -142,7 +142,7 @@ class Currency(db.Model):
     @property
     def has_notes(self):
         """Check if currency has any notes (text or images)"""
-        return bool(self.admin_notes) or self.images.count() > 0
+        return bool(self.admin_notes) or self.active_images.count() > 0
     
     @property
     def latest_note_timestamp(self):
@@ -153,8 +153,8 @@ class Currency(db.Model):
         if self.notes_updated_at:
             timestamps.append(self.notes_updated_at)
         
-        # Add image timestamps
-        for image in self.images.all():
+        # Add image timestamps (only non-deleted images)
+        for image in self.active_images.all():
             if image.uploaded_at:
                 timestamps.append(image.uploaded_at)
         
@@ -217,11 +217,17 @@ class NoteImage(db.Model):
     deleted_by = db.Column(db.String(80), nullable=True)
     delete_reason = db.Column(db.Text, nullable=True)
     
-    # Relationship - only show non-deleted images by default
+    # Relationship - show all images, filtering handled in queries
     currency = db.relationship('Currency', backref=db.backref('images',
                                                              lazy='dynamic',
-                                                             primaryjoin="and_(NoteImage.currency_id==Currency.id, NoteImage.deleted_at.is_(None))",
                                                              cascade='all, delete-orphan'))
+    
+    # Relationship for non-deleted images only (viewonly to avoid conflicts)
+    currency_active = db.relationship('Currency', backref=db.backref('active_images',
+                                                                    lazy='dynamic',
+                                                                    primaryjoin="and_(NoteImage.currency_id==Currency.id, NoteImage.deleted_at==None)",
+                                                                    viewonly=True,
+                                                                    overlaps="currency,images"))
     
     @property
     def is_deleted(self):
@@ -967,7 +973,7 @@ def delete_currency(currency_id):
         change_reason='Currency deleted by admin'
     )
     
-    # Soft delete all associated images
+    # Soft delete all associated images (use all images, not just active ones)
     for image in currency.images.all():
         if not image.is_deleted:
             image.soft_delete(
@@ -1016,9 +1022,9 @@ def selling():
 def get_currency_notes(currency_id):
     currency = Currency.query.get_or_404(currency_id)
     
-    # Get attached images with captions
+    # Get attached images with captions (only non-deleted images)
     images_data = []
-    for image in currency.images.all():
+    for image in currency.active_images.all():
         images_data.append({
             'id': image.id,
             'filename': image.filename,
