@@ -30,9 +30,9 @@
                         <h6 class="card-subtitle text-muted">{{ currency.name }}</h6>
                     </div>
                     <div class="d-flex align-items-center">
-                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.admin_notes %}has-notes{% endif %}"
+                        <button class="btn btn-outline-info btn-sm me-2 {% if currency.has_notes %}has-notes{% endif %}"
                                 onclick="showCurrencyInfo('{{ currency.id }}')"
-                                title="{% if currency.admin_notes %}View currency information and notes{% else %}View currency information{% endif %}">
+                                title="{% if currency.has_notes %}View currency information and notes{% else %}View currency information{% endif %}">
                             <i class="fas fa-info"></i>
                         </button>
                     </div>
@@ -124,9 +124,9 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <button class="btn btn-outline-info btn-sm {% if currency.admin_notes %}has-notes{% endif %}"
+                                    <button class="btn btn-outline-info btn-sm {% if currency.has_notes %}has-notes{% endif %}"
                                             onclick="showCurrencyInfo('{{ currency.id }}')"
-                                            title="{% if currency.admin_notes %}View currency information and notes{% else %}View currency information{% endif %}">
+                                            title="{% if currency.has_notes %}View currency information and notes{% else %}View currency information{% endif %}">
                                         <i class="fas fa-info"></i>
                                     </button>
                                 </td>
